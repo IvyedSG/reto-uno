@@ -16,10 +16,6 @@
 }
 
 @layer components {
-  .card {
-    @apply bg-white border border-slate-100 rounded-[--radius-main] shadow-[--shadow-main] p-6;
-  }
-  
   .btn-primary {
     @apply bg-black text-white px-6 py-2.5 rounded-full font-medium transition-all hover:bg-zinc-800 active:scale-95;
   }
