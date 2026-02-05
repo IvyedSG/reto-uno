@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Comparador Falabella & ML",
+  "version": "1.0.0",
+  "description": "Compara precios entre Falabella y MercadoLibre automáticamente.",
+  "permissions": ["storage", "tabs", "activeTab"],
+  "action": {
+    "default_popup": "src/popup/popup.html"
+  },
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.falabella.com.pe/*"],
+      "js": ["src/content/content-script.ts"]
+    },
+    {
+      "matches": ["https://listado.mercadolibre.com.pe/*"],
+      "js": ["src/content/content-script.ts"]
+    }
+  ]
+}
