@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-primary: #000000;
-  --color-brand-secondary: #f3f4f6;
+  --color-primary: #000000;
+  --color-secondary: #f3f4f6;
   --color-accent: #6366f1;
-  --radius-app: 1.5rem;
-  --shadow-premium: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
+  --radius-main: 1.5rem;
+  --shadow-main: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
 }
 
 @layer base {
@@ -16,8 +16,8 @@
 }
 
 @layer components {
-  .card-premium {
-    @apply bg-white border border-slate-100 rounded-[--radius-app] shadow-[--shadow-premium] p-6;
+  .card {
+    @apply bg-white border border-slate-100 rounded-[--radius-main] shadow-[--shadow-main] p-6;
   }
   
   .btn-primary {
@@ -28,7 +28,19 @@
     @apply bg-slate-100 text-slate-900 px-6 py-2.5 rounded-full font-medium transition-all hover:bg-slate-200 active:scale-95;
   }
 
-  .input-premium {
+  .input {
     @apply w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none transition-all;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    @apply w-1;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
   }
 }
