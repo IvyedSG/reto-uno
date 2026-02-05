@@ -34,6 +34,7 @@ function collectContentEntries() {
 
 export default defineConfig({
   plugins: [tailwindcss(), crx({ manifest })],
+  publicDir: 'public',
   server: {
     port: 5173,
     strictPort: true,

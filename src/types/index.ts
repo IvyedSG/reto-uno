@@ -27,3 +27,17 @@ export interface Product {
   brand: string | null;
   seller: string | null;
 }
+
+export type Action = 'START_SCRAPING' | 'CANCEL_SCRAPING' | 'SCRAPING_PROGRESS' | 'SCRAPING_DONE' | 'SCRAPING_ERROR';
+
+export interface ScrapingUpdate {
+  action: Action;
+  keywordId: string;
+  progress?: number;
+  products?: Product[];
+  error?: string;
+}
+
+export const PORT_NAMES = {
+  SEARCH: 'search-orchestrator'
+};

@@ -18,5 +18,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "vite.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "vite.config.ts", "src/popup/tailwind.browser.js"]
 }

@@ -1,9 +1,61 @@
 import { StorageManager } from '../utils/storage-manager';
+import { PORT_NAMES, ScrapingUpdate } from '../types';
 
 document.addEventListener('DOMContentLoaded', async () => {
     const keywordInput = document.getElementById('keyword-input') as HTMLInputElement;
     const addBtn = document.getElementById('add-keyword-btn');
     const keywordsList = document.getElementById('keywords-list');
+    const loadingEl = document.getElementById('loading');
+    const contentEl = document.getElementById('content');
+
+    let port: chrome.runtime.Port | null = null;
+
+    /**
+     * Inicia el proceso de scraping para una keyword específica
+     */
+    const startScraping = (keywordId: string) => {
+        if (!port) {
+            port = chrome.runtime.connect({ name: PORT_NAMES.SEARCH });
+            
+            port.onMessage.addListener((msg: ScrapingUpdate) => {
+                console.log('Popup: Mensaje del orquestador:', msg);
+                handleScrapingUpdate(msg);
+            });
+
+            port.onDisconnect.addListener(() => {
+                console.log('Popup: Orquestador desconectado');
+                port = null;
+            });
+        }
+
+        loadingEl?.classList.remove('hidden');
+        contentEl?.classList.add('hidden');
+
+        port.postMessage({
+            action: 'START_SCRAPING',
+            keywordId
+        } as ScrapingUpdate);
+    };
+
+    /**
+     * Maneja las actualizaciones recibidas desde el orquestador
+     */
+    const handleScrapingUpdate = (update: ScrapingUpdate) => {
+        switch (update.action) {
+            case 'SCRAPING_PROGRESS':
+                console.log(`Progreso: ${update.progress}%`);
+                break;
+            case 'SCRAPING_DONE':
+                loadingEl?.classList.add('hidden');
+                contentEl?.classList.remove('hidden');
+                renderKeywords(); // Actualizar conteos
+                break;
+            case 'SCRAPING_ERROR':
+                loadingEl?.classList.add('hidden');
+                console.error('Error en scraping:', update.error);
+                break;
+        }
+    };
 
     /**
      * Renderiza la lista de keywords desde el almacenamiento
@@ -18,13 +70,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <svg class="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                    <p class="text-xs font-medium text-center">No hay búsquedas registradas</p>
+                    <p class="text-xs font-medium text-center text-slate-800">No hay búsquedas registradas</p>
                 </div>`;
             return;
         }
 
         keywordsList.innerHTML = keywords.map(k => `
-            <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl group hover:border-slate-200 transition-all">
+            <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl group hover:border-slate-200 transition-all cursor-pointer search-item" data-id="${k.id}">
                 <div class="flex flex-col min-w-0">
                     <span class="text-sm font-semibold text-slate-700 truncate">${k.text}</span>
                     <div class="flex items-center gap-2 mt-0.5">
@@ -37,9 +89,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                 </div>
                 <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button class="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-500" title="Ver estadísticas">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                    </button>
                     <button class="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors text-slate-400 delete-btn" title="Eliminar" data-id="${k.id}">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                     </button>
@@ -47,9 +96,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
         `).join('');
 
-        // Listeners individuales para eliminar
+        keywordsList.querySelectorAll('.search-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if ((e.target as HTMLElement).closest('.delete-btn')) return;
+                const id = (item as HTMLElement).dataset.id;
+                if (id) startScraping(id);
+            });
+        });
+
         keywordsList.querySelectorAll('.delete-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
                 const id = (e.currentTarget as HTMLElement).dataset.id;
                 if (id) {
                     await StorageManager.deleteKeyword(id);
@@ -65,9 +122,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const handleAddKeyword = async () => {
         const text = keywordInput.value.trim();
         if (text) {
-            await StorageManager.addKeyword(text);
+            const newKeyword = await StorageManager.addKeyword(text);
             keywordInput.value = '';
-            renderKeywords();
+            await renderKeywords();
+            startScraping(newKeyword.id);
         }
     };
 
