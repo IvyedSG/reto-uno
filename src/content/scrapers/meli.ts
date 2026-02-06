@@ -1,154 +1,157 @@
 import { BaseScraper } from './base-scraper';
 import { Product } from '../../types';
+import { isDuplicate } from './scraper-utils';
 
+/**
+ * SCRAPER DE MERCADOLIBRE PERU - SINGLE PAGE
+ * 
+ * Este scraper extrae TODOS los productos de la página actual.
+ * La paginación es manejada por el background script que abre
+ * múltiples páginas y acumula los productos.
+ * 
+ * Selectores verificados (Feb 2026):
+ * - Cards: li.ui-search-layout__item
+ * - Título + Link: a.poly-component__title
+ * - Precio: .poly-price__current .andes-money-amount__fraction
+ */
 export class MeliScraper extends BaseScraper {
-  /**
-   * Selectores actualizados para MercadoLibre Peru (2025)
-   * - .poly-card es el contenedor moderno
-   * - .poly-component__title es el título y link
-   * - .andes-money-amount__fraction es el precio
-   */
-  private readonly SELECTORS = {
-    productCards: [
-      '.poly-card',
-      'li.ui-search-layout__item',
-      '.ui-search-result__wrapper'
-    ],
-    title: [
-      '.poly-component__title',
-      'a.poly-component__title',
-      '.ui-search-item__title'
-    ],
-    price: [
-      '.andes-money-amount__fraction',
-      '.poly-price__current .andes-money-amount__fraction',
-      '.price-tag-fraction'
-    ],
-    link: [
-      'a.poly-component__title',
-      'a.ui-search-link',
-      'a[href*="/p/"]'
-    ]
-  };
+  private processedUrls = new Set<string>();
 
   constructor(keyword: string, keywordId: string) {
-    // Limitar a 50 productos ya que no podemos navegar entre páginas
-    // (navegar destruye el content script)
-    super('MercadoLibre', keyword, keywordId, 50);
+    super('MercadoLibre', keyword, keywordId, 100);
   }
 
   async scrape(): Promise<Product[]> {
-    console.log(`[MeliScraper] Iniciando scraping para: ${this.keyword}`);
+    console.log(`[MercadoLibre] === INICIANDO SCRAPING ===`);
+    console.log(`[MercadoLibre] URL: ${window.location.href}`);
+    
     const results: Product[] = [];
-    let attempts = 0;
-    const maxAttempts = 5; // Reducido: no navegamos páginas, solo scroll
-
-    while (results.length < this.maxProducts && attempts < maxAttempts) {
-      await this.wait(1500);
+    
+    try {
+      // Esperar a que la página cargue productos
+      await this.waitForProducts();
       
-      const cards = this.findElements(this.SELECTORS.productCards);
-      console.log(`[MeliScraper] Encontradas ${cards.length} cards`);
+      // Scroll completo para cargar productos lazy-loaded
+      await this.scrollEntirePage();
       
-      if (cards.length === 0) {
-        attempts++;
-        await this.scrollToLoadMore();
-        continue;
-      }
-
-      const previousCount = results.length;
-
-      for (const card of cards) {
-        if (results.length >= this.maxProducts) break;
-        
-        const product = this.extractProduct(card as HTMLElement, results.length + 1);
-        if (product && !this.isDuplicate(results, product)) {
+      // Extraer todos los productos
+      const products = this.extractAllProducts();
+      
+      // Agregar productos válidos (sin duplicados)
+      for (const product of products) {
+        if (!this.processedUrls.has(product.url) && !isDuplicate(results, product)) {
+          product.position = results.length + 1;
           results.push(product);
-          console.log(`[MeliScraper] Producto ${results.length}: ${product.title.substring(0, 30)}... - ${product.priceVisible}`);
+          this.processedUrls.add(product.url);
         }
       }
-
-      const progress = Math.min(Math.round((results.length / this.maxProducts) * 100), 100);
-      this.reportProgress(progress, results);
-
-      if (results.length === previousCount) {
-        // No se encontraron más productos nuevos, intentar scroll
-        attempts++;
-        await this.scrollToLoadMore();
-        
-        // Si después del scroll sigue igual, terminamos
-        // NO navegamos a otra página porque eso mata el content script
-        console.log(`[MeliScraper] Sin nuevos productos, intento ${attempts}/${maxAttempts}`);
-      } else {
-        attempts = 0;
-      }
+      
+      console.log(`[MercadoLibre] Productos extraídos: ${results.length}`);
+      
+    } catch (error) {
+      console.error('[MercadoLibre] Error:', error);
     }
-
-    console.log(`[MeliScraper] Scraping completo: ${results.length} productos`);
+    
+    console.log(`[MercadoLibre] === SCRAPING COMPLETADO: ${results.length} productos ===`);
     return results;
   }
 
-  private extractProduct(card: HTMLElement, position: number): Product | null {
-    const titleEl = this.findElement(card, this.SELECTORS.title) as HTMLAnchorElement;
-    const priceEl = this.findElement(card, this.SELECTORS.price);
-    const linkEl = this.findElement(card, this.SELECTORS.link) as HTMLAnchorElement;
+  private async waitForProducts(): Promise<void> {
+    const maxWait = 8000;
+    const interval = 300;
+    let waited = 0;
+    
+    while (waited < maxWait) {
+      const cards = document.querySelectorAll('li.ui-search-layout__item');
+      if (cards.length > 0) {
+        console.log(`[MercadoLibre] Productos encontrados: ${cards.length}`);
+        return;
+      }
+      await this.wait(interval);
+      waited += interval;
+    }
+    
+    console.log('[MercadoLibre] Timeout esperando productos');
+  }
 
-    if (!titleEl && !linkEl) return null;
+  private async scrollEntirePage(): Promise<void> {
+    console.log('[MercadoLibre] Haciendo scroll...');
+    
+    const scrollStep = 600;
+    let lastScrollTop = 0;
+    let sameCount = 0;
+    
+    while (sameCount < 3) {
+      window.scrollBy({ top: scrollStep, behavior: 'smooth' });
+      await this.wait(100);
+      
+      const currentTop = document.documentElement.scrollTop;
+      if (currentTop === lastScrollTop) {
+        sameCount++;
+      } else {
+        sameCount = 0;
+      }
+      lastScrollTop = currentTop;
+    }
+    
+    await this.wait(300);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    await this.wait(200);
+  }
 
-    const title = titleEl?.textContent?.trim() || '';
-    const url = linkEl?.href || titleEl?.href || '';
+  private extractAllProducts(): Product[] {
+    const products: Product[] = [];
+    const cards = document.querySelectorAll('li.ui-search-layout__item');
+    
+    console.log(`[MercadoLibre] Tarjetas: ${cards.length}`);
+    
+    for (const card of cards) {
+      const product = this.extractProduct(card as HTMLElement);
+      if (product) {
+        products.push(product);
+      }
+    }
+    
+    return products;
+  }
 
+  private extractProduct(card: HTMLElement): Product | null {
+    const titleLink = card.querySelector('a.poly-component__title') as HTMLAnchorElement;
+    if (!titleLink) return null;
+    
+    const title = titleLink.textContent?.trim() || '';
+    const url = titleLink.href || '';
+    
     if (!title || !url) return null;
-
-    // MercadoLibre Peru: precio como "3.469" (dots = thousands) o "578,17" (comma = decimals)
-    // El elemento .andes-money-amount__fraction solo tiene la parte entera
-    const priceText = priceEl?.textContent?.trim() || '';
-    // Quitar dots de miles para parsear correctamente
-    const priceCleaned = priceText.replace(/\./g, '');
-    const priceNumeric = priceCleaned ? parseInt(priceCleaned, 10) : null;
-
+    
+    // Precio
+    const priceContainer = card.querySelector('.poly-price__current');
+    const priceFraction = priceContainer?.querySelector('.andes-money-amount__fraction');
+    
+    let priceNumeric: number | null = null;
+    let priceVisible = 'N/A';
+    
+    if (priceFraction) {
+      const text = priceFraction.textContent?.trim().replace(/\./g, '') || '';
+      const num = parseInt(text, 10);
+      if (!isNaN(num)) {
+        priceNumeric = num;
+        priceVisible = `S/ ${num.toLocaleString('es-PE')}`;
+      }
+    }
+    
     return {
       site: 'MercadoLibre',
       keyword: this.keyword,
       keywordId: this.keywordId,
       timestamp: Date.now(),
-      position,
+      position: 0,
       title,
-      priceVisible: priceNumeric ? `S/ ${priceNumeric.toLocaleString('es-PE')}` : 'N/A',
+      priceVisible,
       priceNumeric,
       url,
       brand: null,
       seller: null
     };
-  }
-
-  private findElements(selectors: string[]): Element[] {
-    for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      if (elements.length > 0) {
-        console.log(`[MeliScraper] Usando selector: ${selector} (${elements.length} elementos)`);
-        return Array.from(elements);
-      }
-    }
-    return [];
-  }
-
-  private findElement(parent: HTMLElement, selectors: string[]): Element | null {
-    for (const selector of selectors) {
-      const element = parent.querySelector(selector);
-      if (element) return element;
-    }
-    return null;
-  }
-
-  private isDuplicate(products: Product[], product: Product): boolean {
-    return products.some(p => p.url === product.url);
-  }
-
-  private async scrollToLoadMore(): Promise<void> {
-    window.scrollTo({
-      top: document.documentElement.scrollHeight,
-      behavior: 'smooth'
-    });
-    await this.wait(1000);
   }
 }

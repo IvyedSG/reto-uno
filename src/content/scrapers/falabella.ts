@@ -1,43 +1,39 @@
 import { BaseScraper } from './base-scraper';
 import { Product } from '../../types';
+import { isDuplicate } from './scraper-utils';
 
 export class FalabellaScraper extends BaseScraper {
   /**
-   * Selectores con fallbacks - Falabella usa React y cambia frecuentemente
+   * Selectores verificados por análisis de browser (Feb 2026):
+   * - Cards: .pod-link (son <a> tags directamente)
+   * - Brand: b.pod-title
+   * - Product name: b.pod-subTitle
+   * - Price: li.prices-0 span.copy10
+   * - Pagination: #testId-pagination-bottom-arrow-right
    */
   private readonly SELECTORS = {
     productCards: [
-      '.pod-4col',
-      '[data-testid="product-card"]',
-      '.search-results-4-grid > div',
-      '.grid-pod',
-      'div[data-pod]',
-      '.pod'
+      'a.pod-link',
+      '.pod-link'
     ],
-    title: [
+    brand: [
       'b.pod-title',
-      '.pod-title',
-      '[data-testid="product-title"]',
-      '.search-result-title',
-      '.pod-subTitle'
+      '.pod-title'
+    ],
+    productName: [
+      'b.pod-subTitle',
+      '.pod-subTitle',
+      '.pod-description'
     ],
     price: [
+      'li.prices-0 span.copy10',
+      'li.prices-0 span',
       '.prices-0',
-      '.copy10.primary',
-      '[data-testid="product-price"]',
-      'span[class*="price"]',
-      '.pod-summary-v3 .price-0'
-    ],
-    link: [
-      'a.pod-link',
-      'a[href*="/product/"]',
-      '.pod-link',
-      'a[href*="/falabella-pe/product/"]'
+      '.copy10.primary'
     ],
     nextPage: [
-      'button#testId-pagination-top-arrow-right',
-      '.pagination-next',
-      '[data-testid="pagination-next"]'
+      '#testId-pagination-bottom-arrow-right',
+      'button#testId-pagination-top-arrow-right'
     ]
   };
 
@@ -46,20 +42,27 @@ export class FalabellaScraper extends BaseScraper {
   }
 
   async scrape(): Promise<Product[]> {
-    console.log(`[FalabellaScraper] Iniciando scraping para: ${this.keyword}`);
+    console.log(`[Falabella] Iniciando scraping: ${this.keyword}`);
     const results: Product[] = [];
     let attempts = 0;
-    const maxAttempts = 15;
+    const maxAttempts = 20;
+    let pagesVisited = 0;
+    const maxPages = 3;
 
-    while (results.length < this.maxProducts && attempts < maxAttempts) {
-      await this.wait(2000); 
+    while (results.length < this.maxProducts && attempts < maxAttempts && pagesVisited < maxPages) {
+      // Scroll para cargar productos lazy-loaded
+      await this.scrollFullPage();
+      await this.wait(2000);
       
-      const cards = this.findElements(this.SELECTORS.productCards);
-      console.log(`[FalabellaScraper] Encontradas ${cards.length} cards`);
+      const cards = this.findCards();
+      console.log(`[Falabella] Encontradas ${cards.length} tarjetas en página ${pagesVisited + 1}`);
       
       if (cards.length === 0) {
         attempts++;
-        await this.scrollToLoadMore();
+        if (attempts >= 3) {
+          console.log('[Falabella] No se encontraron tarjetas después de 3 intentos');
+          break;
+        }
         continue;
       }
 
@@ -68,45 +71,76 @@ export class FalabellaScraper extends BaseScraper {
       for (const card of cards) {
         if (results.length >= this.maxProducts) break;
         
-        const product = this.extractProduct(card as HTMLElement, results.length + 1);
-        if (product && !this.isDuplicate(results, product)) {
+        const product = this.extractProduct(card as HTMLAnchorElement, results.length + 1);
+        if (product && !isDuplicate(results, product)) {
           results.push(product);
-          console.log(`[FalabellaScraper] Producto ${results.length}: ${product.title.substring(0, 30)}... - ${product.priceVisible}`);
         }
       }
 
+      console.log(`[Falabella] Extraídos ${results.length} productos hasta ahora`);
+      
       const progress = Math.min(Math.round((results.length / this.maxProducts) * 100), 100);
       this.reportProgress(progress, results);
 
-      if (results.length === previousCount) {
+      // Si no encontramos nuevos productos y ya tenemos algunos, intentar paginación
+      if (results.length === previousCount && results.length > 0) {
         attempts++;
+      }
+      
+      // Intentar ir a la siguiente página
+      if (results.length < this.maxProducts) {
         const navigated = await this.tryNextPage();
-        if (!navigated) {
-          await this.scrollToLoadMore();
+        if (navigated) {
+          pagesVisited++;
+          attempts = 0;
+          console.log(`[Falabella] Navegando a página ${pagesVisited + 1}`);
+          await this.wait(3000);
+        } else if (results.length === previousCount) {
+          console.log('[Falabella] No hay más páginas disponibles');
+          break;
         }
-      } else {
-        attempts = 0;
       }
     }
 
-    console.log(`[FalabellaScraper] Scraping completo: ${results.length} productos`);
+    console.log(`[Falabella] Scraping completado: ${results.length} productos`);
     return results;
   }
 
-  private extractProduct(card: HTMLElement, position: number): Product | null {
-    const titleEl = this.findElement(card, this.SELECTORS.title);
+  private findCards(): Element[] {
+    for (const selector of this.SELECTORS.productCards) {
+      const cards = document.querySelectorAll(selector);
+      if (cards.length > 0) {
+        return Array.from(cards);
+      }
+    }
+    return [];
+  }
+
+  private findElement(parent: HTMLElement, selectors: string[]): Element | null {
+    for (const selector of selectors) {
+      const el = parent.querySelector(selector);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  private extractProduct(card: HTMLAnchorElement, position: number): Product | null {
+    // El card es un <a> tag, así que ya tiene el href
+    const url = card.href || '';
+    
+    // Buscar marca y nombre del producto
+    const brandEl = this.findElement(card, this.SELECTORS.brand);
+    const nameEl = this.findElement(card, this.SELECTORS.productName);
     const priceEl = this.findElement(card, this.SELECTORS.price);
-    const linkEl = this.findElement(card, this.SELECTORS.link) as HTMLAnchorElement;
 
-    if (!titleEl) return null;
-
-    const title = titleEl?.textContent?.trim() || '';
-    const url = linkEl?.href || '';
-
+    const brand = brandEl?.textContent?.trim() || '';
+    const productName = nameEl?.textContent?.trim() || '';
+    
+    // Combinar marca y nombre para título completo
+    const title = productName || brand || '';
+    
     if (!title || !url) return null;
 
-    // Falabella Peru: precios como "S/ 1.820" (dot = thousands) o "S/99.90" (dot = decimal)
-    // Logic: if there's a dot and only 2 digits after, treat as decimal, otherwise as thousand separator
     const priceRaw = priceEl?.textContent?.trim() || '';
     const priceNumeric = this.parseFalabellaPrice(priceRaw);
 
@@ -120,85 +154,54 @@ export class FalabellaScraper extends BaseScraper {
       priceVisible: priceRaw || 'N/A',
       priceNumeric,
       url,
-      brand: null,
+      brand: brand || null,
       seller: null
     };
   }
 
   /**
    * Parsea precios de Falabella Peru.
-   * Formatos posibles:
-   * - "S/ 1.820" -> 1820 (dot as thousand separator)
-   * - "S/99.90" -> 99.90 -> 99 (dot as decimal)
-   * - "S/ 99" -> 99
-   * - "1820" -> 1820
+   * Formato: S/ 1,699.00 (coma = miles, punto = decimal)
+   * Ejemplo: "S/ 29.90" -> 30, "S/ 1,299.00" -> 1299
    */
   private parseFalabellaPrice(priceText: string): number | null {
     if (!priceText) return null;
     
-    // Remove currency symbols and spaces
+    // Remover "S/" y espacios
     let clean = priceText.replace(/S\/\s*/gi, '').trim();
-    
-    // If empty after cleaning, return null
     if (!clean) return null;
     
-    // Check if it has decimals (dot followed by exactly 2 digits at the end)
-    const decimalMatch = clean.match(/^([\d.]+)[,.](\d{2})$/);
-    if (decimalMatch) {
-      // Remove thousand separators (dots) from the integer part
-      const integerPart = decimalMatch[1].replace(/\./g, '');
-      // Return as integer (ignoring cents for comparison purposes)
-      return parseInt(integerPart, 10);
-    }
+    // Formato Falabella: 1,699.00 (coma = miles, punto = decimal)
+    // Remover comas (separador de miles)
+    clean = clean.replace(/,/g, '');
     
-    // No decimals - just remove all dots (they're thousand separators)
-    const cleaned = clean.replace(/\./g, '').replace(/,/g, '');
-    const result = parseInt(cleaned, 10);
+    // Parsear como float y redondear a entero
+    const num = parseFloat(clean);
     
-    return isNaN(result) ? null : result;
-  }
-
-  private findElements(selectors: string[]): Element[] {
-    for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      if (elements.length > 0) {
-        console.log(`[FalabellaScraper] Usando selector: ${selector} (${elements.length} elementos)`);
-        return Array.from(elements);
-      }
-    }
-    return [];
-  }
-
-  private findElement(parent: HTMLElement, selectors: string[]): Element | null {
-    for (const selector of selectors) {
-      const element = parent.querySelector(selector);
-      if (element) return element;
-    }
-    return null;
-  }
-
-  private isDuplicate(products: Product[], product: Product): boolean {
-    return products.some(p => p.url === product.url);
+    return isNaN(num) ? null : Math.round(num);
   }
 
   private async tryNextPage(): Promise<boolean> {
     for (const selector of this.SELECTORS.nextPage) {
       const nextBtn = document.querySelector(selector) as HTMLElement;
-      if (nextBtn && !nextBtn.hasAttribute('disabled')) {
-        console.log('[FalabellaScraper] Navegando a siguiente página...');
+      if (nextBtn && !nextBtn.hasAttribute('disabled') && !nextBtn.classList.contains('disabled')) {
         nextBtn.click();
-        await this.wait(3000); 
         return true;
       }
     }
     return false;
   }
 
-  private async scrollToLoadMore(): Promise<void> {
-    window.scrollTo({
-      top: document.documentElement.scrollHeight,
-      behavior: 'smooth'
-    });
-    await this.wait(1500);
+  private async scrollFullPage(): Promise<void> {
+    const totalHeight = document.documentElement.scrollHeight;
+    const step = window.innerHeight;
+    
+    for (let pos = 0; pos < totalHeight; pos += step) {
+      window.scrollTo({ top: pos, behavior: 'smooth' });
+      await this.wait(250);
+    }
+    
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+    await this.wait(500);
   }
 }

@@ -9,18 +9,36 @@ chrome.runtime.onInstalled.addListener(() => {
 const orchestrator = new PortManager();
 
 // URLs de búsqueda por sitio
-const SEARCH_URLS: Record<Site, (keyword: string) => string> = {
+const SEARCH_URLS: Record<Site, (keyword: string, page?: number) => string> = {
   Falabella: (kw) => `https://www.falabella.com.pe/falabella-pe/search?Ntt=${encodeURIComponent(kw)}`,
-  MercadoLibre: (kw) => `https://listado.mercadolibre.com.pe/${encodeURIComponent(kw.replace(/ /g, '-'))}`
+  MercadoLibre: (kw, page = 1) => {
+    const base = `https://listado.mercadolibre.com.pe/${encodeURIComponent(kw.replace(/ /g, '-'))}`;
+    if (page === 1) return base;
+    const offset = (page - 1) * 48 + 1;
+    return `${base}_Desde_${offset}_NoIndex_True`;
+  }
 };
 
-// Archivo del content script por sitio
 const CONTENT_SCRIPTS: Record<Site, string> = {
   Falabella: 'content/falabella.js',
   MercadoLibre: 'content/meli.js'
 };
 
-// Cola para procesar mensajes SCRAPING_DONE secuencialmente
+// Estado de scraping activo - mapeado por keywordId para MercadoLibre
+interface ScrapingState {
+  keywordId: string;
+  keywordText: string;
+  site: Site;
+  currentPage: number;
+  maxPages: number;
+  allProducts: Product[];
+  isActive: boolean;
+}
+
+// Usar keywordId como key principal (más robusto)
+const meliScrapingStates: Map<string, ScrapingState> = new Map();
+
+// Cola para mensajes
 interface QueuedMessage {
   keywordId: string;
   products: Product[];
@@ -30,21 +48,19 @@ let messageQueue: QueuedMessage[] = [];
 let isProcessingQueue = false;
 
 async function processQueue(): Promise<void> {
-  if (isProcessingQueue || messageQueue.length === 0) {
-    return;
-  }
+  if (isProcessingQueue || messageQueue.length === 0) return;
   
   isProcessingQueue = true;
   
   while (messageQueue.length > 0) {
     const msg = messageQueue.shift()!;
-    console.log(`[Queue] Procesando mensaje para keywordId: ${msg.keywordId}, productos: ${msg.products.length}`);
+    console.log(`[Queue] Procesando: ${msg.keywordId}, ${msg.products.length} productos`);
     
     try {
       await StorageManager.saveProducts(msg.keywordId, msg.products);
-      console.log(`[Queue] Guardado completado para keywordId: ${msg.keywordId}`);
+      console.log(`[Queue] Guardado OK: ${msg.keywordId}`);
     } catch (error) {
-      console.error(`[Queue] Error guardando productos:`, error);
+      console.error(`[Queue] Error guardando:`, error);
     }
   }
   
@@ -52,56 +68,165 @@ async function processQueue(): Promise<void> {
 }
 
 function enqueueMessage(keywordId: string, products: Product[]): void {
-  console.log(`[Queue] Encolando mensaje para keywordId: ${keywordId}, productos: ${products.length}`);
   messageQueue.push({ keywordId, products });
-  // Procesar la cola de forma asíncrona
   processQueue();
 }
 
 /**
- * Inject content script and send scraping message
+ * Abre una página y ejecuta el scraping
  */
-async function injectAndStartScraping(
-  tabId: number, 
+async function scrapePageForSite(
   site: Site,
   keywordId: string,
-  keywordText: string
+  keywordText: string,
+  page: number
 ): Promise<void> {
+  const url = SEARCH_URLS[site](keywordText, page);
+  
+  console.log(`[Background] Abriendo ${site} página ${page}: ${url}`);
+  
+  const tab = await chrome.tabs.create({ url, active: false });
+  
+  // Esperar a que la página cargue
+  await new Promise<void>((resolve) => {
+    const listener = (tabId: number, info: chrome.tabs.TabChangeInfo) => {
+      if (tabId === tab.id && info.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    
+    // Timeout de seguridad
+    setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }, 15000);
+  });
+  
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  
+  console.log(`[Background] Inyectando script en ${site} tab ${tab.id}`);
+  
   try {
-    // Wait for page to be fully loaded
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    // Inject the content script programmatically
-    console.log(`Background: Inyectando script para ${site} en tab ${tabId}`);
-    
     await chrome.scripting.executeScript({
-      target: { tabId },
+      target: { tabId: tab.id! },
       files: [CONTENT_SCRIPTS[site]]
     });
     
-    console.log(`Background: Script inyectado para ${site}, esperando a que se inicialice...`);
-    
-    // Wait for script to initialize
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Send the start scraping message
-    await chrome.tabs.sendMessage(tabId, {
+    await chrome.tabs.sendMessage(tab.id!, {
       action: 'START_SCRAPING',
       keywordId,
       keywordText,
       site,
-      tabId
+      tabId: tab.id,
+      page
     });
     
-    console.log(`Background: Mensaje START_SCRAPING enviado a ${site}`);
+    console.log(`[Background] START_SCRAPING enviado a ${site} página ${page}`);
   } catch (error) {
-    console.error(`Background: Error inyectando script para ${site}:`, error);
+    console.error(`[Background] Error en página ${page}:`, error);
+    // Si hay error, finalizar
+    const state = meliScrapingStates.get(keywordId);
+    if (state) {
+      await finalizeMultiPageScraping(keywordId);
+    }
   }
 }
 
 /**
- * Orquestador central para la comunicación entre el popup y los content scripts.
+ * Inicia scraping multi-página para MercadoLibre
  */
+async function startMeliMultiPageScraping(keywordId: string, keywordText: string): Promise<void> {
+  console.log(`[Background] Iniciando ML multi-page para: ${keywordId}`);
+  
+  meliScrapingStates.set(keywordId, {
+    keywordId,
+    keywordText,
+    site: 'MercadoLibre',
+    currentPage: 1,
+    maxPages: 3,
+    allProducts: [],
+    isActive: true
+  });
+  
+  await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.RUNNING);
+  await scrapePageForSite('MercadoLibre', keywordId, keywordText, 1);
+}
+
+/**
+ * Continuar con la siguiente página
+ */
+async function continueScrapingNextPage(keywordId: string): Promise<void> {
+  const state = meliScrapingStates.get(keywordId);
+  if (!state || !state.isActive) {
+    console.log(`[Background] Estado no encontrado o inactivo para: ${keywordId}`);
+    return;
+  }
+  
+  if (state.currentPage >= state.maxPages) {
+    console.log(`[Background] Máximo de páginas alcanzado (${state.maxPages})`);
+    await finalizeMultiPageScraping(keywordId);
+    return;
+  }
+  
+  if (state.allProducts.length >= 100) {
+    console.log(`[Background] Suficientes productos (${state.allProducts.length})`);
+    await finalizeMultiPageScraping(keywordId);
+    return;
+  }
+  
+  state.currentPage++;
+  console.log(`[Background] Continuando a página ${state.currentPage}`);
+  
+  await scrapePageForSite(state.site, state.keywordId, state.keywordText, state.currentPage);
+}
+
+/**
+ * Finaliza el scraping multi-página - ASYNC para garantizar orden correcto
+ */
+async function finalizeMultiPageScraping(keywordId: string): Promise<void> {
+  const state = meliScrapingStates.get(keywordId);
+  if (!state) {
+    console.log(`[Background] Finalize: estado no encontrado para ${keywordId}`);
+    return;
+  }
+  
+  console.log(`[Background] === FINALIZANDO ${keywordId}: ${state.allProducts.length} productos ===`);
+  
+  state.isActive = false;
+  
+  // PASO 1: Guardar productos primero (esto también actualiza productCount internamente)
+  if (state.allProducts.length > 0) {
+    console.log(`[Background] Guardando ${state.allProducts.length} productos...`);
+    await StorageManager.saveProducts(state.keywordId, state.allProducts);
+    console.log(`[Background] Productos guardados OK`);
+  }
+  
+  // PASO 2: Actualizar estado a DONE (después de que productCount ya está actualizado)
+  console.log(`[Background] Actualizando estado a DONE...`);
+  await StorageManager.updateKeywordStatus(state.keywordId, KeywordStatus.DONE);
+  console.log(`[Background] Estado actualizado a DONE`);
+  
+  // PASO 3: Notificar al popup
+  try {
+    orchestrator.postMessage('SCRAPING_DONE', {
+      keywordId: state.keywordId,
+      products: state.allProducts
+    });
+  } catch (e) {
+    console.log('[Background] No se pudo notificar al popup (puede estar cerrado)');
+  }
+  
+  // Limpiar estado
+  meliScrapingStates.delete(keywordId);
+  
+  console.log(`[Background] === SCRAPING COMPLETADO EXITOSAMENTE ===`);
+}
+
+// Orquestador central
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== PORT_NAMES.SEARCH) return;
 
@@ -111,56 +236,34 @@ chrome.runtime.onConnect.addListener((port) => {
   orchestrator.onMessage(async (message: PortMessage) => {
     console.log('Background: Mensaje recibido:', message.type);
 
-    // Handler para scraping de un solo sitio
     if (message.type === 'START_SCRAPING' && message.payload.site && message.payload.keywordText) {
       const { keywordId, keywordText, site } = message.payload;
       
-      await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.RUNNING);
-
-      const url = SEARCH_URLS[site](keywordText);
-      const tab = await chrome.tabs.create({ 
-        url, 
-        active: false 
-      });
-
-      console.log(`Background: Tab ${tab.id} abierta para ${site} con keyword: ${keywordText}`);
-      
-      chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-        if (tabId === tab.id && info.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(listener);
-          injectAndStartScraping(tab.id!, site, keywordId, keywordText);
-        }
-      });
+      if (site === 'MercadoLibre') {
+        await startMeliMultiPageScraping(keywordId, keywordText);
+      } else {
+        await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.RUNNING);
+        await scrapePageForSite(site, keywordId, keywordText, 1);
+      }
     }
 
-    // Handler para scraping de AMBOS sitios simultáneamente
     if (message.type === 'START_BOTH_SCRAPING' && message.payload.keywordText) {
       const { keywordId, keywordText } = message.payload;
       
       await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.RUNNING);
-
-      const sites: Site[] = ['Falabella', 'MercadoLibre'];
-      
-      for (const site of sites) {
-        const url = SEARCH_URLS[site](keywordText);
-        const tab = await chrome.tabs.create({ 
-          url, 
-          active: false 
-        });
-
-        console.log(`Background: Tab ${tab.id} abierta para ${site} con keyword: ${keywordText}`);
-        
-        chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-          if (tabId === tab.id && info.status === 'complete') {
-            chrome.tabs.onUpdated.removeListener(listener);
-            injectAndStartScraping(tab.id!, site, keywordId, keywordText);
-          }
-        });
-      }
+      await scrapePageForSite('Falabella', keywordId, keywordText, 1);
+      await startMeliMultiPageScraping(keywordId, keywordText);
     }
 
     if (message.type === 'CANCEL_SCRAPING') {
       const { keywordId } = message.payload;
+      
+      const state = meliScrapingStates.get(keywordId);
+      if (state) {
+        state.isActive = false;
+        meliScrapingStates.delete(keywordId);
+      }
+      
       await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.CANCELLED);
     }
   });
@@ -170,31 +273,83 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
-chrome.runtime.onMessage.addListener((message: ScrapingUpdate, _sender) => {
-  console.log('Background: Actualización de content script:', message.action);
+/**
+ * Maneja mensajes de los content scripts
+ */
+chrome.runtime.onMessage.addListener((message: ScrapingUpdate, sender) => {
+  console.log('Background: Content script:', message.action, 'productos:', message.products?.length);
 
   if (message.action === 'SCRAPING_PROGRESS') {
-    StorageManager.updateProductCount(message.keywordId, message.products?.length || 0);
-    orchestrator.postMessage('SCRAPING_PROGRESS', message);
+    StorageManager.updateProductCount(message.keywordId!, message.products?.length || 0);
+    try {
+      orchestrator.postMessage('SCRAPING_PROGRESS', message);
+    } catch (e) { /* popup puede estar cerrado */ }
   }
 
   if (message.action === 'SCRAPING_DONE') {
-    console.log(`Background: SCRAPING_DONE recibido con ${message.products?.length || 0} productos`);
-    StorageManager.updateKeywordStatus(message.keywordId, KeywordStatus.DONE);
+    const products = message.products || [];
+    const keywordId = message.keywordId!;
     
-    if (message.products && message.products.length > 0) {
-      // Encolar para procesamiento secuencial
-      enqueueMessage(message.keywordId, message.products);
+    console.log(`[Background] SCRAPING_DONE: ${products.length} productos de keywordId: ${keywordId}`);
+    
+    // Cerrar tab
+    if (sender.tab?.id) {
+      chrome.tabs.remove(sender.tab.id).catch(() => {});
     }
     
-    orchestrator.postMessage('SCRAPING_DONE', message);
+    // Verificar si es MercadoLibre multi-página
+    const state = meliScrapingStates.get(keywordId);
+    
+    if (state && state.isActive) {
+      // Es MercadoLibre multi-página
+      state.allProducts.push(...products);
+      console.log(`[Background] ML acumulado: ${state.allProducts.length} productos`);
+      
+      // Si devolvió menos de 48, es la última página
+      if (products.length < 48) {
+        console.log(`[Background] Última página (${products.length} < 48)`);
+        // Usar IIFE async porque el callback de onMessage es síncrono
+        (async () => {
+          await finalizeMultiPageScraping(keywordId);
+        })();
+      } else {
+        // Continuar con siguiente página
+        continueScrapingNextPage(keywordId);
+      }
+    } else {
+      // Es Falabella o scraping normal - usar async IIFE también
+      console.log(`[Background] Falabella/normal: finalizando`);
+      
+      (async () => {
+        if (products.length > 0) {
+          await StorageManager.saveProducts(keywordId, products);
+        }
+        await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.DONE);
+        
+        try {
+          orchestrator.postMessage('SCRAPING_DONE', message);
+        } catch (e) { /* popup puede estar cerrado */ }
+      })();
+    }
   }
 
   if (message.action === 'SCRAPING_ERROR') {
-    StorageManager.updateKeywordStatus(message.keywordId, KeywordStatus.ERROR);
-    orchestrator.postMessage('SCRAPING_ERROR', message);
+    const keywordId = message.keywordId!;
+    
+    // Si era ML multi-página, finalizar con lo que tengamos
+    const state = meliScrapingStates.get(keywordId);
+    if (state && state.allProducts.length > 0) {
+      // Usar IIFE async
+      (async () => {
+        await finalizeMultiPageScraping(keywordId);
+      })();
+    } else {
+      StorageManager.updateKeywordStatus(keywordId, KeywordStatus.ERROR);
+      try {
+        orchestrator.postMessage('SCRAPING_ERROR', message);
+      } catch (e) { /* popup puede estar cerrado */ }
+    }
   }
   
-  // Retornar true para indicar que manejaremos async (aunque ahora usamos cola)
   return true;
 });
