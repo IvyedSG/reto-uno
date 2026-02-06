@@ -1,4 +1,4 @@
-import { PORT_NAMES, ScrapingUpdate, PortMessage, Site, KeywordStatus } from '../types';
+import { PORT_NAMES, ScrapingUpdate, PortMessage, Site, KeywordStatus, Product } from '../types';
 import { PortManager } from '../utils/messaging';
 import { StorageManager } from '../utils/storage-manager';
 
@@ -13,6 +13,91 @@ const SEARCH_URLS: Record<Site, (keyword: string) => string> = {
   Falabella: (kw) => `https://www.falabella.com.pe/falabella-pe/search?Ntt=${encodeURIComponent(kw)}`,
   MercadoLibre: (kw) => `https://listado.mercadolibre.com.pe/${encodeURIComponent(kw.replace(/ /g, '-'))}`
 };
+
+// Archivo del content script por sitio
+const CONTENT_SCRIPTS: Record<Site, string> = {
+  Falabella: 'content/falabella.js',
+  MercadoLibre: 'content/meli.js'
+};
+
+// Cola para procesar mensajes SCRAPING_DONE secuencialmente
+interface QueuedMessage {
+  keywordId: string;
+  products: Product[];
+}
+
+let messageQueue: QueuedMessage[] = [];
+let isProcessingQueue = false;
+
+async function processQueue(): Promise<void> {
+  if (isProcessingQueue || messageQueue.length === 0) {
+    return;
+  }
+  
+  isProcessingQueue = true;
+  
+  while (messageQueue.length > 0) {
+    const msg = messageQueue.shift()!;
+    console.log(`[Queue] Procesando mensaje para keywordId: ${msg.keywordId}, productos: ${msg.products.length}`);
+    
+    try {
+      await StorageManager.saveProducts(msg.keywordId, msg.products);
+      console.log(`[Queue] Guardado completado para keywordId: ${msg.keywordId}`);
+    } catch (error) {
+      console.error(`[Queue] Error guardando productos:`, error);
+    }
+  }
+  
+  isProcessingQueue = false;
+}
+
+function enqueueMessage(keywordId: string, products: Product[]): void {
+  console.log(`[Queue] Encolando mensaje para keywordId: ${keywordId}, productos: ${products.length}`);
+  messageQueue.push({ keywordId, products });
+  // Procesar la cola de forma asíncrona
+  processQueue();
+}
+
+/**
+ * Inject content script and send scraping message
+ */
+async function injectAndStartScraping(
+  tabId: number, 
+  site: Site,
+  keywordId: string,
+  keywordText: string
+): Promise<void> {
+  try {
+    // Wait for page to be fully loaded
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Inject the content script programmatically
+    console.log(`Background: Inyectando script para ${site} en tab ${tabId}`);
+    
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: [CONTENT_SCRIPTS[site]]
+    });
+    
+    console.log(`Background: Script inyectado para ${site}, esperando a que se inicialice...`);
+    
+    // Wait for script to initialize
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Send the start scraping message
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'START_SCRAPING',
+      keywordId,
+      keywordText,
+      site,
+      tabId
+    });
+    
+    console.log(`Background: Mensaje START_SCRAPING enviado a ${site}`);
+  } catch (error) {
+    console.error(`Background: Error inyectando script para ${site}:`, error);
+  }
+}
 
 /**
  * Orquestador central para la comunicación entre el popup y los content scripts.
@@ -38,17 +123,12 @@ chrome.runtime.onConnect.addListener((port) => {
         active: false 
       });
 
-      console.log(`Background: Tab ${tab.id} abierta en background para ${site} con keyword: ${keywordText}`);
+      console.log(`Background: Tab ${tab.id} abierta para ${site} con keyword: ${keywordText}`);
+      
       chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
         if (tabId === tab.id && info.status === 'complete') {
           chrome.tabs.onUpdated.removeListener(listener);
-          
-          setTimeout(() => {
-            chrome.tabs.sendMessage(tab.id!, {
-              ...message.payload,
-              tabId: tab.id
-            });
-          }, 2000);
+          injectAndStartScraping(tab.id!, site, keywordId, keywordText);
         }
       });
     }
@@ -73,16 +153,7 @@ chrome.runtime.onConnect.addListener((port) => {
         chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
           if (tabId === tab.id && info.status === 'complete') {
             chrome.tabs.onUpdated.removeListener(listener);
-            
-            setTimeout(() => {
-              chrome.tabs.sendMessage(tab.id!, {
-                action: 'START_SCRAPING',
-                keywordId,
-                keywordText,
-                site,
-                tabId: tab.id
-              });
-            }, 2000);
+            injectAndStartScraping(tab.id!, site, keywordId, keywordText);
           }
         });
       }
@@ -99,24 +170,31 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
-chrome.runtime.onMessage.addListener(async (message: ScrapingUpdate, _sender) => {
+chrome.runtime.onMessage.addListener((message: ScrapingUpdate, _sender) => {
   console.log('Background: Actualización de content script:', message.action);
 
   if (message.action === 'SCRAPING_PROGRESS') {
-    await StorageManager.updateProductCount(message.keywordId, message.products?.length || 0);
+    StorageManager.updateProductCount(message.keywordId, message.products?.length || 0);
     orchestrator.postMessage('SCRAPING_PROGRESS', message);
   }
 
   if (message.action === 'SCRAPING_DONE') {
-    await StorageManager.updateKeywordStatus(message.keywordId, KeywordStatus.DONE);
-    if (message.products) {
-      await StorageManager.saveProducts(message.keywordId, message.products);
+    console.log(`Background: SCRAPING_DONE recibido con ${message.products?.length || 0} productos`);
+    StorageManager.updateKeywordStatus(message.keywordId, KeywordStatus.DONE);
+    
+    if (message.products && message.products.length > 0) {
+      // Encolar para procesamiento secuencial
+      enqueueMessage(message.keywordId, message.products);
     }
+    
     orchestrator.postMessage('SCRAPING_DONE', message);
   }
 
   if (message.action === 'SCRAPING_ERROR') {
-    await StorageManager.updateKeywordStatus(message.keywordId, KeywordStatus.ERROR);
+    StorageManager.updateKeywordStatus(message.keywordId, KeywordStatus.ERROR);
     orchestrator.postMessage('SCRAPING_ERROR', message);
   }
+  
+  // Retornar true para indicar que manejaremos async (aunque ahora usamos cola)
+  return true;
 });

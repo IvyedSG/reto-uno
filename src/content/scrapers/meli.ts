@@ -3,48 +3,45 @@ import { Product } from '../../types';
 
 export class MeliScraper extends BaseScraper {
   /**
-   * Selectores con fallbacks - MercadoLibre cambia su HTML frecuentemente
+   * Selectores actualizados para MercadoLibre Peru (2025)
+   * - .poly-card es el contenedor moderno
+   * - .poly-component__title es el título y link
+   * - .andes-money-amount__fraction es el precio
    */
   private readonly SELECTORS = {
     productCards: [
+      '.poly-card',
       'li.ui-search-layout__item',
-      '.ui-search-result__wrapper',
-      '.ui-search-result',
-      '.poly-card__content'
+      '.ui-search-result__wrapper'
     ],
     title: [
+      '.poly-component__title',
       'a.poly-component__title',
-      '.ui-search-item__title',
-      'h2.ui-search-item__title',
-      '.poly-component__title-wrapper a'
+      '.ui-search-item__title'
     ],
     price: [
-      '.poly-price__current .andes-money-amount__fraction',
       '.andes-money-amount__fraction',
+      '.poly-price__current .andes-money-amount__fraction',
       '.price-tag-fraction'
     ],
     link: [
       'a.poly-component__title',
       'a.ui-search-link',
-      'a.ui-search-result__content',
       'a[href*="/p/"]'
-    ],
-    nextPage: [
-      'a.andes-pagination__link[title="Siguiente"]',
-      'a[title="Siguiente"]',
-      '.andes-pagination__button--next a'
     ]
   };
 
   constructor(keyword: string, keywordId: string) {
-    super('MercadoLibre', keyword, keywordId, 100);
+    // Limitar a 50 productos ya que no podemos navegar entre páginas
+    // (navegar destruye el content script)
+    super('MercadoLibre', keyword, keywordId, 50);
   }
 
   async scrape(): Promise<Product[]> {
-    console.log(`🔍 [MeliScraper] Iniciando scraping para: ${this.keyword}`);
+    console.log(`[MeliScraper] Iniciando scraping para: ${this.keyword}`);
     const results: Product[] = [];
     let attempts = 0;
-    const maxAttempts = 20;
+    const maxAttempts = 5; // Reducido: no navegamos páginas, solo scroll
 
     while (results.length < this.maxProducts && attempts < maxAttempts) {
       await this.wait(1500);
@@ -66,7 +63,7 @@ export class MeliScraper extends BaseScraper {
         const product = this.extractProduct(card as HTMLElement, results.length + 1);
         if (product && !this.isDuplicate(results, product)) {
           results.push(product);
-          console.log(`[MeliScraper] Producto ${results.length}: ${product.title.substring(0, 30)}...`);
+          console.log(`[MeliScraper] Producto ${results.length}: ${product.title.substring(0, 30)}... - ${product.priceVisible}`);
         }
       }
 
@@ -74,17 +71,19 @@ export class MeliScraper extends BaseScraper {
       this.reportProgress(progress, results);
 
       if (results.length === previousCount) {
+        // No se encontraron más productos nuevos, intentar scroll
         attempts++;
-        const navigated = await this.tryNextPage();
-        if (!navigated) {
-          await this.scrollToLoadMore();
-        }
+        await this.scrollToLoadMore();
+        
+        // Si después del scroll sigue igual, terminamos
+        // NO navegamos a otra página porque eso mata el content script
+        console.log(`[MeliScraper] Sin nuevos productos, intento ${attempts}/${maxAttempts}`);
       } else {
         attempts = 0;
       }
     }
 
-    console.log(`✅ [MeliScraper] Scraping completo: ${results.length} productos`);
+    console.log(`[MeliScraper] Scraping completo: ${results.length} productos`);
     return results;
   }
 
@@ -96,10 +95,16 @@ export class MeliScraper extends BaseScraper {
     if (!titleEl && !linkEl) return null;
 
     const title = titleEl?.textContent?.trim() || '';
-    const priceText = priceEl?.textContent?.replace(/\./g, '') || '';
     const url = linkEl?.href || titleEl?.href || '';
 
     if (!title || !url) return null;
+
+    // MercadoLibre Peru: precio como "3.469" (dots = thousands) o "578,17" (comma = decimals)
+    // El elemento .andes-money-amount__fraction solo tiene la parte entera
+    const priceText = priceEl?.textContent?.trim() || '';
+    // Quitar dots de miles para parsear correctamente
+    const priceCleaned = priceText.replace(/\./g, '');
+    const priceNumeric = priceCleaned ? parseInt(priceCleaned, 10) : null;
 
     return {
       site: 'MercadoLibre',
@@ -108,8 +113,8 @@ export class MeliScraper extends BaseScraper {
       timestamp: Date.now(),
       position,
       title,
-      priceVisible: priceEl ? `S/ ${priceEl.textContent}` : 'N/A',
-      priceNumeric: this.parsePrice(priceText),
+      priceVisible: priceNumeric ? `S/ ${priceNumeric.toLocaleString('es-PE')}` : 'N/A',
+      priceNumeric,
       url,
       brand: null,
       seller: null
@@ -137,19 +142,6 @@ export class MeliScraper extends BaseScraper {
 
   private isDuplicate(products: Product[], product: Product): boolean {
     return products.some(p => p.url === product.url);
-  }
-
-  private async tryNextPage(): Promise<boolean> {
-    for (const selector of this.SELECTORS.nextPage) {
-      const nextBtn = document.querySelector(selector) as HTMLAnchorElement;
-      if (nextBtn) {
-        console.log('[MeliScraper] Navegando a siguiente página...');
-        nextBtn.click();
-        await this.wait(2500);
-        return true;
-      }
-    }
-    return false;
   }
 
   private async scrollToLoadMore(): Promise<void> {

@@ -5,6 +5,9 @@ const STORAGE_KEYS = {
   PRODUCTS: 'products_'
 };
 
+// Mutex para serializar operaciones de guardado y evitar race conditions
+let saveLock: Promise<void> = Promise.resolve();
+
 export class StorageManager {
   /**
    * Obtiene todas las keywords del almacenamiento
@@ -72,15 +75,65 @@ export class StorageManager {
   }
 
   /**
-   * Guarda los productos scrapeados para una keyword específica
+   * Guarda los productos scrapeados para una keyword específica.
+   * Usa un mutex para evitar race conditions cuando ambos sitios terminan casi al mismo tiempo.
    */
   static async saveProducts(keywordId: string, products: Product[]): Promise<void> {
+    // Esperar a que termine cualquier operación anterior
+    const previousLock = saveLock;
+    let releaseLock: () => void;
+    saveLock = new Promise(resolve => { releaseLock = resolve; });
+    
+    await previousLock;
+    
+    try {
+      await this._saveProductsInternal(keywordId, products);
+    } finally {
+      releaseLock!();
+    }
+  }
+
+  /**
+   * Implementación interna de saveProducts (serializada por el mutex)
+   */
+  private static async _saveProductsInternal(keywordId: string, products: Product[]): Promise<void> {
+    const key = `${STORAGE_KEYS.PRODUCTS}${keywordId}`;
+    
+    // Obtener productos existentes
+    const existingProducts = await this.getProducts(keywordId);
+    console.log(`[StorageManager] saveProducts llamado para keywordId: ${keywordId}`);
+    console.log(`[StorageManager] Productos existentes: ${existingProducts.length}`);
+    console.log(`[StorageManager] Nuevos productos a guardar: ${products.length}`);
+    
+    // Determinar el sitio de los nuevos productos
+    const newSite = products.length > 0 ? products[0].site : null;
+    console.log(`[StorageManager] Sitio de nuevos productos: ${newSite}`);
+    
+    // Contar productos existentes por sitio
+    const existingFalabella = existingProducts.filter(p => p.site === 'Falabella').length;
+    const existingMeli = existingProducts.filter(p => p.site === 'MercadoLibre').length;
+    console.log(`[StorageManager] Productos existentes - Falabella: ${existingFalabella}, MercadoLibre: ${existingMeli}`);
+    
+    // Filtrar productos existentes que NO son del mismo sitio (para mantenerlos)
+    const productsFromOtherSite = existingProducts.filter(p => p.site !== newSite);
+    console.log(`[StorageManager] Productos de otros sitios a mantener: ${productsFromOtherSite.length}`);
+    
+    // Combinar: productos de otros sitios + nuevos productos
+    const combinedProducts = [...productsFromOtherSite, ...products];
+    console.log(`[StorageManager] Total productos después de combinar: ${combinedProducts.length}`);
+    
+    // Contar productos combinados por sitio
+    const combinedFalabella = combinedProducts.filter(p => p.site === 'Falabella').length;
+    const combinedMeli = combinedProducts.filter(p => p.site === 'MercadoLibre').length;
+    console.log(`[StorageManager] Productos combinados - Falabella: ${combinedFalabella}, MercadoLibre: ${combinedMeli}`);
+    
     await chrome.storage.local.set({
-      [`${STORAGE_KEYS.PRODUCTS}${keywordId}`]: products
+      [key]: combinedProducts
     });
     
     // Actualiza el contador de productos de la keyword
-    await this.updateProductCount(keywordId, products.length);
+    await this.updateProductCount(keywordId, combinedProducts.length);
+    console.log(`[StorageManager] Guardado completado. Total: ${combinedProducts.length} productos`);
   }
 
   /**
@@ -89,6 +142,7 @@ export class StorageManager {
   static async getProducts(keywordId: string): Promise<Product[]> {
     const key = `${STORAGE_KEYS.PRODUCTS}${keywordId}`;
     const result = await chrome.storage.local.get(key);
-    return result[key] || [];
+    const products = result[key] || [];
+    return products;
   }
 }

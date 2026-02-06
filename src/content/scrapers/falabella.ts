@@ -46,7 +46,7 @@ export class FalabellaScraper extends BaseScraper {
   }
 
   async scrape(): Promise<Product[]> {
-    console.log(`🔍 [FalabellaScraper] Iniciando scraping para: ${this.keyword}`);
+    console.log(`[FalabellaScraper] Iniciando scraping para: ${this.keyword}`);
     const results: Product[] = [];
     let attempts = 0;
     const maxAttempts = 15;
@@ -71,7 +71,7 @@ export class FalabellaScraper extends BaseScraper {
         const product = this.extractProduct(card as HTMLElement, results.length + 1);
         if (product && !this.isDuplicate(results, product)) {
           results.push(product);
-          console.log(`[FalabellaScraper] Producto ${results.length}: ${product.title.substring(0, 30)}...`);
+          console.log(`[FalabellaScraper] Producto ${results.length}: ${product.title.substring(0, 30)}... - ${product.priceVisible}`);
         }
       }
 
@@ -89,7 +89,7 @@ export class FalabellaScraper extends BaseScraper {
       }
     }
 
-    console.log(`✅ [FalabellaScraper] Scraping completo: ${results.length} productos`);
+    console.log(`[FalabellaScraper] Scraping completo: ${results.length} productos`);
     return results;
   }
 
@@ -101,10 +101,14 @@ export class FalabellaScraper extends BaseScraper {
     if (!titleEl) return null;
 
     const title = titleEl?.textContent?.trim() || '';
-    const priceText = priceEl?.textContent?.replace(/\./g, '').replace(/,/g, '') || '';
     const url = linkEl?.href || '';
 
     if (!title || !url) return null;
+
+    // Falabella Peru: precios como "S/ 1.820" (dot = thousands) o "S/99.90" (dot = decimal)
+    // Logic: if there's a dot and only 2 digits after, treat as decimal, otherwise as thousand separator
+    const priceRaw = priceEl?.textContent?.trim() || '';
+    const priceNumeric = this.parseFalabellaPrice(priceRaw);
 
     return {
       site: 'Falabella',
@@ -113,12 +117,45 @@ export class FalabellaScraper extends BaseScraper {
       timestamp: Date.now(),
       position,
       title,
-      priceVisible: priceEl ? priceEl.textContent?.trim() || 'N/A' : 'N/A',
-      priceNumeric: this.parsePrice(priceText),
+      priceVisible: priceRaw || 'N/A',
+      priceNumeric,
       url,
       brand: null,
       seller: null
     };
+  }
+
+  /**
+   * Parsea precios de Falabella Peru.
+   * Formatos posibles:
+   * - "S/ 1.820" -> 1820 (dot as thousand separator)
+   * - "S/99.90" -> 99.90 -> 99 (dot as decimal)
+   * - "S/ 99" -> 99
+   * - "1820" -> 1820
+   */
+  private parseFalabellaPrice(priceText: string): number | null {
+    if (!priceText) return null;
+    
+    // Remove currency symbols and spaces
+    let clean = priceText.replace(/S\/\s*/gi, '').trim();
+    
+    // If empty after cleaning, return null
+    if (!clean) return null;
+    
+    // Check if it has decimals (dot followed by exactly 2 digits at the end)
+    const decimalMatch = clean.match(/^([\d.]+)[,.](\d{2})$/);
+    if (decimalMatch) {
+      // Remove thousand separators (dots) from the integer part
+      const integerPart = decimalMatch[1].replace(/\./g, '');
+      // Return as integer (ignoring cents for comparison purposes)
+      return parseInt(integerPart, 10);
+    }
+    
+    // No decimals - just remove all dots (they're thousand separators)
+    const cleaned = clean.replace(/\./g, '').replace(/,/g, '');
+    const result = parseInt(cleaned, 10);
+    
+    return isNaN(result) ? null : result;
   }
 
   private findElements(selectors: string[]): Element[] {
