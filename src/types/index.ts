@@ -28,11 +28,15 @@ export interface Product {
   seller: string | null;
 }
 
-export type Action = 'START_SCRAPING' | 'CANCEL_SCRAPING' | 'SCRAPING_PROGRESS' | 'SCRAPING_DONE' | 'SCRAPING_ERROR';
+export type Action = 'START_SCRAPING' | 'CANCEL_SCRAPING' | 'SCRAPING_PROGRESS' | 'SCRAPING_DONE' | 'SCRAPING_ERROR' | 'OPEN_TAB';
+
+export type Site = 'Falabella' | 'MercadoLibre';
 
 export interface ScrapingUpdate {
   action: Action;
   keywordId: string;
+  keywordText?: string;
+  site?: Site;
   progress?: number;
   products?: Product[];
   error?: string;
