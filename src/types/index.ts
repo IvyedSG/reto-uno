@@ -12,6 +12,8 @@ export interface Keyword {
   status: KeywordStatus;
   createdAt: number;
   productCount: number;
+  falabellaDone?: boolean;
+  mercadoLibreDone?: boolean;
 }
 
 export interface Product {

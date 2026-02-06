@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load saved scraping mode preference
   const loadScrapingMode = async (): Promise<ScrapingMode> => {
     const result = await chrome.storage.local.get('scrapingMode');
-    return (result.scrapingMode as ScrapingMode) || 'normal';
+    return (result.scrapingMode as ScrapingMode) || 'fast';
   };
 
   // Save scraping mode preference
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Get current scraping mode from select
   const getScrapingMode = (): ScrapingMode => {
-    return (modeSelect?.value as ScrapingMode) || 'normal';
+    return (modeSelect?.value as ScrapingMode) || 'fast';
   };
 
   // Initialize mode select with saved preference
@@ -409,7 +409,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    keywordsList.innerHTML = keywords.map(k => `
+    keywordsList.innerHTML = keywords.map(k => {
+      const falabellaDone = k.falabellaDone === true;
+      const mercadoLibreDone = k.mercadoLibreDone === true;
+      const bothDone = falabellaDone && mercadoLibreDone;
+      
+      return `
       <div class="p-3 bg-slate-50 border border-slate-100 rounded-xl" data-id="${k.id}">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-bold text-slate-700 flex items-center gap-1.5">
@@ -432,13 +437,20 @@ document.addEventListener('DOMContentLoaded', async () => {
               ${ICONS.cancel}
               <span>Cancelar</span>
             </button>
+          ` : bothDone ? `
+            <div class="flex-1 text-center text-xs text-emerald-600 bg-emerald-50 py-2 rounded-lg flex items-center justify-center gap-2">
+              ${ICONS.check}
+              <span class="font-medium">Extracción completa</span>
+            </div>
           ` : `
-            <button class="btn-site btn-falabella search-site-btn flex-1" data-id="${k.id}" data-site="Falabella">
-              ${ICONS.search}
+            <button class="btn-site btn-falabella search-site-btn flex-1 ${falabellaDone ? 'btn-site-done' : ''}" 
+                    data-id="${k.id}" data-site="Falabella" ${falabellaDone ? 'disabled' : ''}>
+              ${falabellaDone ? ICONS.check : ICONS.search}
               <span>Falabella</span>
             </button>
-            <button class="btn-site btn-meli search-site-btn flex-1" data-id="${k.id}" data-site="MercadoLibre">
-              ${ICONS.search}
+            <button class="btn-site btn-meli search-site-btn flex-1 ${mercadoLibreDone ? 'btn-site-done' : ''}" 
+                    data-id="${k.id}" data-site="MercadoLibre" ${mercadoLibreDone ? 'disabled' : ''}>
+              ${mercadoLibreDone ? ICONS.check : ICONS.search}
               <span>MercadoLibre</span>
             </button>
           `}
@@ -447,9 +459,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div class="flex items-center gap-3 text-[10px]">
           <span class="status-badge ${getStatusClass(k.status)}">${getStatusIcon(k.status)} ${getStatusText(k.status)}</span>
           <span class="text-slate-400">Productos: ${k.productCount}</span>
+          ${falabellaDone || mercadoLibreDone ? `
+            <span class="text-emerald-500 flex items-center gap-1">
+              ${falabellaDone ? '<span class="bg-emerald-100 px-1 rounded text-[9px]">F✓</span>' : ''}
+              ${mercadoLibreDone ? '<span class="bg-emerald-100 px-1 rounded text-[9px]">ML✓</span>' : ''}
+            </span>
+          ` : ''}
         </div>
       </div>
-    `).join('');
+    `}).join('');
 
     // Event listeners para búsqueda por sitio
     keywordsList.querySelectorAll('.search-site-btn').forEach(btn => {

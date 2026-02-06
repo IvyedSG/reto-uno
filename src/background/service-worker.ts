@@ -229,10 +229,9 @@ async function finalizeMultiPageScraping(keywordId: string, site: Site): Promise
     console.log(`[Background] Productos guardados OK`);
   }
   
-  // PASO 2: Actualizar estado a DONE
-  console.log(`[Background] Actualizando estado a DONE...`);
-  await StorageManager.updateKeywordStatus(state.keywordId, KeywordStatus.DONE);
-  console.log(`[Background] Estado actualizado a DONE`);
+  // PASO 2: Marcar sitio como completado
+  console.log(`[Background] Marcando ${site} como completado...`);
+  await StorageManager.markSiteDone(state.keywordId, site);
   
   // PASO 3: Notificar al popup
   try {

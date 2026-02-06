@@ -135,4 +135,12 @@
   .mode-select {
     @apply text-xs font-medium bg-slate-100 border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 cursor-pointer transition-all hover:border-slate-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none;
   }
+
+  /* Completed site button */
+  .btn-site-done {
+    @apply opacity-60 cursor-not-allowed bg-emerald-50 border-emerald-200 text-emerald-600;
+  }
+  .btn-site-done:hover {
+    @apply bg-emerald-50 border-emerald-200;
+  }
 }

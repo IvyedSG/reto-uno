@@ -64,6 +64,32 @@ export class StorageManager {
   }
 
   /**
+   * Marca un sitio como completo para una keyword
+   */
+  static async markSiteDone(id: string, site: 'Falabella' | 'MercadoLibre'): Promise<void> {
+    const keywords = await this.getKeywords();
+    const index = keywords.findIndex(k => k.id === id);
+    
+    if (index !== -1) {
+      if (site === 'Falabella') {
+        keywords[index].falabellaDone = true;
+      } else {
+        keywords[index].mercadoLibreDone = true;
+      }
+      
+      // Si ambos están completos, marcar status como DONE
+      // Si solo uno está completo, volver a IDLE para permitir el otro
+      if (keywords[index].falabellaDone && keywords[index].mercadoLibreDone) {
+        keywords[index].status = KeywordStatus.DONE;
+      } else {
+        keywords[index].status = KeywordStatus.IDLE;
+      }
+      
+      await chrome.storage.local.set({ [STORAGE_KEYS.KEYWORDS]: keywords });
+    }
+  }
+
+  /**
    * Elimina una keyword y sus productos asociados
    */
   static async deleteKeyword(id: string): Promise<void> {
