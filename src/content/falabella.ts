@@ -15,7 +15,8 @@ chrome.runtime.onMessage.addListener((message: ScrapingUpdate, _sender, sendResp
         
         // Ejecutar scraping de forma asíncrona
         (async () => {
-            const scraper = new FalabellaScraper(message.keywordText!, message.keywordId!);
+            const maxProducts = message.maxProducts || 60;
+            const scraper = new FalabellaScraper(message.keywordText!, message.keywordId!, maxProducts);
             
             try {
                 const products = await scraper.scrape();
@@ -25,6 +26,7 @@ chrome.runtime.onMessage.addListener((message: ScrapingUpdate, _sender, sendResp
                 chrome.runtime.sendMessage({
                     action: 'SCRAPING_DONE' as Action,
                     keywordId: message.keywordId,
+                    site: 'Falabella',
                     products
                 } as ScrapingUpdate);
                 
@@ -35,6 +37,7 @@ chrome.runtime.onMessage.addListener((message: ScrapingUpdate, _sender, sendResp
                 chrome.runtime.sendMessage({
                     action: 'SCRAPING_ERROR' as Action,
                     keywordId: message.keywordId,
+                    site: 'Falabella',
                     error: String(error)
                 } as ScrapingUpdate);
                 

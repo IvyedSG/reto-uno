@@ -24,6 +24,16 @@
             <input type="text" id="keyword-input" placeholder="Ingresa keyword..." class="input flex-1">
             <button id="add-keyword-btn" class="btn-primary !px-4">Agregar</button>
         </div>
+
+        <!-- Selector de modo de scraping -->
+        <div class="flex items-center gap-3 px-1">
+            <span class="text-xs text-slate-500 font-medium">Modo:</span>
+            <select id="scraping-mode-select" class="mode-select">
+                <option value="fast">⚡ Rápido (60/100)</option>
+                <option value="normal" selected>⚙️ Normal (120/200)</option>
+                <option value="complete">🔍 Completo (200/350)</option>
+            </select>
+        </div>
         
         <!-- Lista de keywords -->
         <div id="keywords-list" class="space-y-3 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">

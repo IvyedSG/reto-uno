@@ -25,6 +25,7 @@ export abstract class BaseScraper {
     const update: ScrapingUpdate = {
       action: 'SCRAPING_PROGRESS',
       keywordId: this.keywordId,
+      site: this.siteName,
       progress,
       products
     };

@@ -37,25 +37,23 @@ export class FalabellaScraper extends BaseScraper {
     ]
   };
 
-  constructor(keyword: string, keywordId: string) {
-    super('Falabella', keyword, keywordId, 60);
+  constructor(keyword: string, keywordId: string, maxProducts: number = 60) {
+    super('Falabella', keyword, keywordId, maxProducts);
   }
 
   async scrape(): Promise<Product[]> {
-    console.log(`[Falabella] Iniciando scraping: ${this.keyword}`);
+    console.log(`[Falabella] Iniciando scraping (single-page): ${this.keyword}`);
     const results: Product[] = [];
     let attempts = 0;
-    const maxAttempts = 20;
-    let pagesVisited = 0;
-    const maxPages = 3;
+    const maxAttempts = 5;
 
-    while (results.length < this.maxProducts && attempts < maxAttempts && pagesVisited < maxPages) {
-      // Scroll para cargar productos lazy-loaded
+    // Scroll para cargar productos lazy-loaded
+    while (results.length < this.maxProducts && attempts < maxAttempts) {
       await this.scrollFullPage();
       await this.wait(2000);
       
       const cards = this.findCards();
-      console.log(`[Falabella] Encontradas ${cards.length} tarjetas en página ${pagesVisited + 1}`);
+      console.log(`[Falabella] Encontradas ${cards.length} tarjetas`);
       
       if (cards.length === 0) {
         attempts++;
@@ -77,29 +75,18 @@ export class FalabellaScraper extends BaseScraper {
         }
       }
 
-      console.log(`[Falabella] Extraídos ${results.length} productos hasta ahora`);
+      console.log(`[Falabella] Extraídos ${results.length} productos`);
       
       const progress = Math.min(Math.round((results.length / this.maxProducts) * 100), 100);
       this.reportProgress(progress, results);
 
-      // Si no encontramos nuevos productos y ya tenemos algunos, intentar paginación
-      if (results.length === previousCount && results.length > 0) {
-        attempts++;
+      // Si no encontramos nuevos productos, salir
+      if (results.length === previousCount) {
+        console.log('[Falabella] No hay más productos en esta página');
+        break;
       }
       
-      // Intentar ir a la siguiente página
-      if (results.length < this.maxProducts) {
-        const navigated = await this.tryNextPage();
-        if (navigated) {
-          pagesVisited++;
-          attempts = 0;
-          console.log(`[Falabella] Navegando a página ${pagesVisited + 1}`);
-          await this.wait(3000);
-        } else if (results.length === previousCount) {
-          console.log('[Falabella] No hay más páginas disponibles');
-          break;
-        }
-      }
+      attempts++;
     }
 
     console.log(`[Falabella] Scraping completado: ${results.length} productos`);
@@ -143,6 +130,13 @@ export class FalabellaScraper extends BaseScraper {
 
     const priceRaw = priceEl?.textContent?.trim() || '';
     const priceNumeric = this.parseFalabellaPrice(priceRaw);
+
+    // Validación: ignorar productos con precios inválidos (<=0 o null)
+    // Esto filtra errores de data como precios negativos en la web
+    if (priceNumeric === null || priceNumeric <= 0) {
+      console.log(`[Falabella] Precio inválido ignorado: ${priceRaw} para "${title.substring(0, 40)}"`);
+      return null;
+    }
 
     return {
       site: 'Falabella',

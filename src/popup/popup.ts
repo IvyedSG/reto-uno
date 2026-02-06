@@ -1,5 +1,5 @@
 import { StorageManager } from '../utils/storage-manager';
-import { PORT_NAMES, ScrapingUpdate, PortMessage, KeywordStatus, Site } from '../types';
+import { PORT_NAMES, ScrapingUpdate, PortMessage, KeywordStatus, Site, ScrapingMode, SCRAPING_LIMITS } from '../types';
 import { PortManager } from '../utils/messaging';
 import { ProductMatcher } from '../utils/product-matcher';
 
@@ -30,7 +30,7 @@ const ICONS = {
   pause: `<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
   </svg>`,
-  savings: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  savings: `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
   </svg>`,
   document: `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -38,6 +38,18 @@ const ICONS = {
   </svg>`,
   trophy: `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+  </svg>`,
+  chevronDown: `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+  </svg>`,
+  chevronUp: `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+  </svg>`,
+  package: `<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+  </svg>`,
+  externalLink: `<svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
   </svg>`
 };
 
@@ -48,8 +60,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   const statsPanel = document.getElementById('stats-panel');
   const statsContent = document.getElementById('stats-content');
   const closeStatsBtn = document.getElementById('close-stats-btn');
+  const modeSelect = document.getElementById('scraping-mode-select') as HTMLSelectElement;
 
   const searchPort = new PortManager();
+
+  // Load saved scraping mode preference
+  const loadScrapingMode = async (): Promise<ScrapingMode> => {
+    const result = await chrome.storage.local.get('scrapingMode');
+    return (result.scrapingMode as ScrapingMode) || 'normal';
+  };
+
+  // Save scraping mode preference
+  const saveScrapingMode = async (mode: ScrapingMode): Promise<void> => {
+    await chrome.storage.local.set({ scrapingMode: mode });
+  };
+
+  // Get current scraping mode from select
+  const getScrapingMode = (): ScrapingMode => {
+    return (modeSelect?.value as ScrapingMode) || 'normal';
+  };
+
+  // Initialize mode select with saved preference
+  if (modeSelect) {
+    const savedMode = await loadScrapingMode();
+    modeSelect.value = savedMode;
+    modeSelect.addEventListener('change', () => {
+      saveScrapingMode(getScrapingMode());
+    });
+  }
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
     console.log('[Popup] Storage changed:', areaName, Object.keys(changes));
@@ -83,14 +121,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const keyword = keywords.find(k => k.id === keywordId);
     if (!keyword) return;
 
+    const mode = getScrapingMode();
+    const limits = SCRAPING_LIMITS[mode];
+    const siteKey = site === 'Falabella' ? 'falabella' : 'mercadolibre';
+
     await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.RUNNING);
     await renderKeywords();
+
+    console.log(`[Popup] Starting ${site} scraping in '${mode}' mode (max: ${limits[siteKey]} products)`);
 
     searchPort.postMessage('START_SCRAPING', {
       action: 'START_SCRAPING',
       keywordId,
       keywordText: keyword.text,
-      site
+      site,
+      scrapingMode: mode,
+      maxProducts: limits[siteKey],
+      maxPages: limits.maxPages[siteKey]
     } as ScrapingUpdate);
   };
 
@@ -233,16 +280,18 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
           <div class="space-y-2">
             ${allPrices.map((item, i) => `
-              <div class="flex items-start gap-2 ${i === 0 ? 'bg-yellow-50 -mx-2 px-2 py-1 rounded' : ''}">
-                <span class="text-xs font-bold ${i === 0 ? 'text-yellow-600' : 'text-slate-400'}">#${i + 1}</span>
-                <div class="flex-1 min-w-0">
-                  <p class="text-[11px] text-slate-700 truncate" title="${item.title}">${item.title}</p>
-                  <div class="flex items-center gap-2">
-                    <span class="font-bold text-green-600 text-xs">S/ ${item.priceNumeric?.toFixed(2)}</span>
-                    <span class="site-tag ${item.site === 'Falabella' ? 'site-tag-falabella' : 'site-tag-meli'}">${item.site}</span>
+              <a href="${item.url}" target="_blank" class="block cursor-pointer hover:bg-slate-100 rounded transition-colors product-link ${i === 0 ? 'bg-yellow-50 -mx-2 px-2 py-1' : ''}" data-url="${item.url}">
+                <div class="flex items-start gap-2">
+                  <span class="text-xs font-bold ${i === 0 ? 'text-yellow-600' : 'text-slate-400'}">#${i + 1}</span>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-[11px] text-slate-700 truncate hover:text-blue-600" title="${item.title}">${item.title}</p>
+                    <div class="flex items-center gap-2">
+                      <span class="font-bold text-green-600 text-xs">S/ ${item.priceNumeric?.toFixed(2)}</span>
+                      <span class="site-tag ${item.site === 'Falabella' ? 'site-tag-falabella' : 'site-tag-meli'}">${item.site}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </a>
             `).join('')}
           </div>
         </div>
@@ -251,18 +300,87 @@ document.addEventListener('DOMContentLoaded', async () => {
         ${groups.length > 0 ? `
         <div class="border-t border-slate-100 pt-3">
           <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Productos Similares (${groups.length} grupos)</p>
-          ${groups.slice(0, 3).map((group, i) => {
-            const falProds = group.products.filter(p => p.site === 'Falabella');
-            const meliProds = group.products.filter(p => p.site === 'MercadoLibre');
+          ${groups.slice(0, 5).map((group, i) => {
+            const { falabella, meli, savings, cheaperSite } = group.stats;
+            const groupId = `group-${i}`;
+            
+            const formatPrice = (p: number | null) => p !== null ? `S/ ${p.toFixed(0)}` : '-';
+            
+            // Sort products by price
+            const falabellaProds = group.products.filter(p => p.site === 'Falabella').sort((a, b) => (a.priceNumeric ?? Infinity) - (b.priceNumeric ?? Infinity));
+            const meliProds = group.products.filter(p => p.site === 'MercadoLibre').sort((a, b) => (a.priceNumeric ?? Infinity) - (b.priceNumeric ?? Infinity));
             
             return `
-            <div class="stats-card mb-2">
-              <p class="text-[11px] font-medium text-slate-700 truncate mb-1" title="${group.name}">
-                Grupo ${i + 1}: ${group.name.substring(0, 35)}...
-              </p>
-              <div class="flex gap-3 text-[10px] text-slate-500">
-                ${falProds.length > 0 ? `<span><span class="site-tag site-tag-falabella">F</span> ${falProds.length}</span>` : ''}
-                ${meliProds.length > 0 ? `<span><span class="site-tag site-tag-meli">ML</span> ${meliProds.length}</span>` : ''}
+            <div class="stats-card mb-3 ${savings && savings > 0 ? 'ring-1 ring-green-200' : ''}">
+              <!-- Header with expand toggle -->
+              <div class="flex items-start justify-between cursor-pointer group-toggle" data-group="${groupId}">
+                <p class="text-[11px] font-bold text-slate-700 truncate flex-1" title="${group.name}">
+                  ${i + 1}. ${group.name.substring(0, 35)}${group.name.length > 35 ? '...' : ''}
+                </p>
+                <button class="flex items-center gap-1 text-[9px] text-slate-400 hover:text-slate-600 transition-colors expand-btn" data-group="${groupId}">
+                  <span class="expand-text">Ver</span>
+                  <span class="chevron-icon">${ICONS.chevronDown}</span>
+                </button>
+              </div>
+              
+              <!-- Summary stats -->
+              <div class="flex gap-3 text-xs text-slate-500 mt-1 mb-2">
+                <span class="flex items-center gap-1">
+                  <span class="site-tag site-tag-falabella">F</span> ${falabella.count} · ${formatPrice(falabella.minPrice)}
+                </span>
+                <span class="flex items-center gap-1">
+                  <span class="site-tag site-tag-meli">ML</span> ${meli.count} · ${formatPrice(meli.minPrice)}
+                </span>
+              </div>
+              
+              <!-- Savings badge -->
+              ${savings !== null && savings > 0 && cheaperSite ? `
+              <div class="flex items-center gap-1 text-xs bg-green-50 text-green-700 rounded px-2 py-1 mb-2">
+                <span class="text-green-600">${ICONS.savings}</span>
+                <span class="font-bold">AHORRO: S/ ${savings.toFixed(0)}</span>
+                <span class="text-green-600">en ${cheaperSite}</span>
+              </div>
+              ` : savings === 0 ? `
+              <div class="text-xs text-slate-400 italic mb-2">Mismo precio</div>
+              ` : ''}
+              
+              <!-- Expandable products list (hidden by default) -->
+              <div class="products-list hidden border-t border-slate-100 pt-2 mt-1" id="${groupId}">
+                ${falabellaProds.length > 0 ? `
+                <div class="mb-2">
+                  <div class="flex items-center gap-1 text-xs font-medium text-slate-600 mb-1">
+                    ${ICONS.package}
+                    <span>Falabella (${falabellaProds.length})</span>
+                  </div>
+                  <div class="space-y-1 ml-4">
+                    ${falabellaProds.map(p => `
+                      <a href="${p.url}" target="_blank" class="product-link flex items-start gap-1 text-[11px] hover:bg-slate-50 rounded p-0.5 cursor-pointer group" data-url="${p.url}">
+                        <span class="text-slate-700 flex-1 truncate group-hover:text-blue-600">${p.title.substring(0, 40)}${p.title.length > 40 ? '...' : ''}</span>
+                        <span class="font-bold text-green-600 whitespace-nowrap">S/ ${p.priceNumeric?.toFixed(0) ?? '-'}</span>
+                        <span class="text-slate-400 group-hover:text-blue-500">${ICONS.externalLink}</span>
+                      </a>
+                    `).join('')}
+                  </div>
+                </div>
+                ` : ''}
+                
+                ${meliProds.length > 0 ? `
+                <div>
+                  <div class="flex items-center gap-1 text-xs font-medium text-slate-600 mb-1">
+                    ${ICONS.package}
+                    <span>MercadoLibre (${meliProds.length})</span>
+                  </div>
+                  <div class="space-y-1 ml-4">
+                    ${meliProds.map(p => `
+                      <a href="${p.url}" target="_blank" class="product-link flex items-start gap-1 text-[11px] hover:bg-slate-50 rounded p-0.5 cursor-pointer group" data-url="${p.url}">
+                        <span class="text-slate-700 flex-1 truncate group-hover:text-blue-600">${p.title.substring(0, 40)}${p.title.length > 40 ? '...' : ''}</span>
+                        <span class="font-bold text-green-600 whitespace-nowrap">S/ ${p.priceNumeric?.toFixed(0) ?? '-'}</span>
+                        <span class="text-slate-400 group-hover:text-blue-500">${ICONS.externalLink}</span>
+                      </a>
+                    `).join('')}
+                  </div>
+                </div>
+                ` : ''}
               </div>
             </div>
             `;
@@ -415,6 +533,48 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   closeStatsBtn?.addEventListener('click', () => {
     statsPanel?.classList.add('hidden');
+  });
+
+  // Handler global para links de productos - usar chrome.tabs.create
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    
+    // Handle product links
+    const link = target.closest('a.product-link');
+    if (link) {
+      e.preventDefault();
+      const url = link.getAttribute('href');
+      if (url) {
+        chrome.tabs.create({ url, active: true });
+      }
+      return;
+    }
+    
+    // Handle expand/collapse for product groups
+    const expandBtn = target.closest('.expand-btn, .group-toggle');
+    if (expandBtn) {
+      const groupId = expandBtn.getAttribute('data-group');
+      if (groupId) {
+        const productsList = document.getElementById(groupId);
+        const btn = document.querySelector(`.expand-btn[data-group="${groupId}"]`);
+        
+        if (productsList && btn) {
+          const isHidden = productsList.classList.contains('hidden');
+          productsList.classList.toggle('hidden');
+          
+          // Update button text and icon
+          const expandText = btn.querySelector('.expand-text');
+          const chevronIcon = btn.querySelector('.chevron-icon');
+          
+          if (expandText) {
+            expandText.textContent = isHidden ? 'Ocultar' : 'Ver';
+          }
+          if (chevronIcon) {
+            chevronIcon.innerHTML = isHidden ? ICONS.chevronUp : ICONS.chevronDown;
+          }
+        }
+      }
+    }
   });
 
   await renderKeywords();

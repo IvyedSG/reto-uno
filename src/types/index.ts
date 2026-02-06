@@ -32,11 +32,41 @@ export type Action = 'START_SCRAPING' | 'START_BOTH_SCRAPING' | 'CANCEL_SCRAPING
 
 export type Site = 'Falabella' | 'MercadoLibre';
 
+// Scraping modes with configurable limits
+export type ScrapingMode = 'fast' | 'normal' | 'complete';
+
+export interface ScrapingLimits {
+  falabella: number;
+  mercadolibre: number;
+  maxPages: { falabella: number; mercadolibre: number };
+}
+
+export const SCRAPING_LIMITS: Record<ScrapingMode, ScrapingLimits> = {
+  fast: { 
+    falabella: 60, 
+    mercadolibre: 100,
+    maxPages: { falabella: 3, mercadolibre: 3 }
+  },
+  normal: { 
+    falabella: 120, 
+    mercadolibre: 200,
+    maxPages: { falabella: 5, mercadolibre: 5 }
+  },
+  complete: { 
+    falabella: 200, 
+    mercadolibre: 350,
+    maxPages: { falabella: 8, mercadolibre: 8 }
+  }
+};
+
 export interface ScrapingUpdate {
   action: Action;
   keywordId: string;
   keywordText?: string;
   site?: Site;
+  scrapingMode?: ScrapingMode;
+  maxProducts?: number;
+  maxPages?: number;
   progress?: number;
   products?: Product[];
   error?: string;

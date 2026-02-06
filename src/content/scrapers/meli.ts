@@ -17,8 +17,8 @@ import { isDuplicate } from './scraper-utils';
 export class MeliScraper extends BaseScraper {
   private processedUrls = new Set<string>();
 
-  constructor(keyword: string, keywordId: string) {
-    super('MercadoLibre', keyword, keywordId, 100);
+  constructor(keyword: string, keywordId: string, maxProducts: number = 100) {
+    super('MercadoLibre', keyword, keywordId, maxProducts);
   }
 
   async scrape(): Promise<Product[]> {
@@ -138,6 +138,12 @@ export class MeliScraper extends BaseScraper {
         priceNumeric = num;
         priceVisible = `S/ ${num.toLocaleString('es-PE')}`;
       }
+    }
+    
+    // Validación: ignorar productos con precios inválidos (<=0 o null)
+    if (priceNumeric === null || priceNumeric <= 0) {
+      console.log(`[MercadoLibre] Precio inválido ignorado para "${title.substring(0, 40)}"`);
+      return null;
     }
     
     return {

@@ -1,17 +1,34 @@
 import { Product } from '../types';
 
+export interface SiteStats {
+  count: number;
+  minPrice: number | null;
+  maxPrice: number | null;
+  avgPrice: number | null;
+}
+
+export interface GroupStats {
+  // Overall stats
+  minPrice: number;
+  maxPrice: number;
+  avgPrice: number;
+  // Per-site stats
+  falabella: SiteStats;
+  meli: SiteStats;
+  // Savings info
+  savings: number | null;  // Positive = savings buying from cheaperSite
+  cheaperSite: 'Falabella' | 'MercadoLibre' | null;
+  // Legacy compatibility
+  meliCount: number;
+  falabellaCount: number;
+  priceDiff: number | null;
+}
+
 export interface ProductGroup {
   id: string;
   name: string;
   products: Product[];
-  stats: {
-    minPrice: number;
-    maxPrice: number;
-    avgPrice: number;
-    meliCount: number;
-    falabellaCount: number;
-    priceDiff: number | null;
-  };
+  stats: GroupStats;
 }
 
 /**
@@ -64,7 +81,7 @@ export class ProductMatcher {
           id: crypto.randomUUID().substring(0, 8),
           name: product.title,
           products: [product],
-          stats: { minPrice: 0, maxPrice: 0, avgPrice: 0, meliCount: 0, falabellaCount: 0, priceDiff: null }
+          stats: this.createEmptyStats()
         });
       }
     }
@@ -77,11 +94,11 @@ export class ProductMatcher {
       g.stats.meliCount > 0 && g.stats.falabellaCount > 0
     );
 
-    // Sort by savings opportunity (price difference)
+    // Sort by savings opportunity
     return crossSiteGroups.sort((a, b) => {
-      const diffA = Math.abs(a.stats.priceDiff ?? 0);
-      const diffB = Math.abs(b.stats.priceDiff ?? 0);
-      return diffB - diffA;
+      const savingsA = a.stats.savings ?? 0;
+      const savingsB = b.stats.savings ?? 0;
+      return savingsB - savingsA;
     });
   }
 
@@ -116,37 +133,86 @@ export class ProductMatcher {
     return intersection / union;
   }
 
+  private static createEmptyStats(): GroupStats {
+    return {
+      minPrice: 0,
+      maxPrice: 0,
+      avgPrice: 0,
+      falabella: { count: 0, minPrice: null, maxPrice: null, avgPrice: null },
+      meli: { count: 0, minPrice: null, maxPrice: null, avgPrice: null },
+      savings: null,
+      cheaperSite: null,
+      meliCount: 0,
+      falabellaCount: 0,
+      priceDiff: null
+    };
+  }
+
   private static calculateStatsForGroups(groups: ProductGroup[]): ProductGroup[] {
     return groups.map(group => {
       const prices = group.products
         .map(p => p.priceNumeric)
         .filter((p): p is number => p !== null && p > 0);
 
-      const meliPrices = group.products
-        .filter(p => p.site === 'MercadoLibre')
+      const meliProducts = group.products.filter(p => p.site === 'MercadoLibre');
+      const falabellaProducts = group.products.filter(p => p.site === 'Falabella');
+
+      const meliPrices = meliProducts
         .map(p => p.priceNumeric)
         .filter((p): p is number => p !== null && p > 0);
 
-      const falabellaPrices = group.products
-        .filter(p => p.site === 'Falabella')
+      const falabellaPrices = falabellaProducts
         .map(p => p.priceNumeric)
         .filter((p): p is number => p !== null && p > 0);
 
-      const meliMin = meliPrices.length > 0 ? Math.min(...meliPrices) : null;
-      const falabellaMin = falabellaPrices.length > 0 ? Math.min(...falabellaPrices) : null;
+      // Calculate per-site stats
+      const meliStats: SiteStats = {
+        count: meliProducts.length,
+        minPrice: meliPrices.length > 0 ? Math.min(...meliPrices) : null,
+        maxPrice: meliPrices.length > 0 ? Math.max(...meliPrices) : null,
+        avgPrice: meliPrices.length > 0 ? meliPrices.reduce((a, b) => a + b, 0) / meliPrices.length : null
+      };
+
+      const falabellaStats: SiteStats = {
+        count: falabellaProducts.length,
+        minPrice: falabellaPrices.length > 0 ? Math.min(...falabellaPrices) : null,
+        maxPrice: falabellaPrices.length > 0 ? Math.max(...falabellaPrices) : null,
+        avgPrice: falabellaPrices.length > 0 ? falabellaPrices.reduce((a, b) => a + b, 0) / falabellaPrices.length : null
+      };
+
+      // Calculate savings (comparing min prices)
+      let savings: number | null = null;
+      let cheaperSite: 'Falabella' | 'MercadoLibre' | null = null;
       
-      // Price difference: positive = Falabella cheaper, negative = Meli cheaper
+      if (meliStats.minPrice !== null && falabellaStats.minPrice !== null) {
+        if (meliStats.minPrice < falabellaStats.minPrice) {
+          savings = falabellaStats.minPrice - meliStats.minPrice;
+          cheaperSite = 'MercadoLibre';
+        } else if (falabellaStats.minPrice < meliStats.minPrice) {
+          savings = meliStats.minPrice - falabellaStats.minPrice;
+          cheaperSite = 'Falabella';
+        } else {
+          savings = 0;
+          cheaperSite = null; // Same price
+        }
+      }
+
+      // Legacy priceDiff: positive = Falabella cheaper, negative = Meli cheaper
       let priceDiff: number | null = null;
-      if (meliMin !== null && falabellaMin !== null) {
-        priceDiff = meliMin - falabellaMin;
+      if (meliStats.minPrice !== null && falabellaStats.minPrice !== null) {
+        priceDiff = meliStats.minPrice - falabellaStats.minPrice;
       }
 
       group.stats = {
         minPrice: prices.length > 0 ? Math.min(...prices) : 0,
         maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
         avgPrice: prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : 0,
-        meliCount: group.products.filter(p => p.site === 'MercadoLibre').length,
-        falabellaCount: group.products.filter(p => p.site === 'Falabella').length,
+        falabella: falabellaStats,
+        meli: meliStats,
+        savings,
+        cheaperSite,
+        meliCount: meliProducts.length,
+        falabellaCount: falabellaProducts.length,
         priceDiff
       };
       
