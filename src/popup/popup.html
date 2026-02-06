@@ -11,7 +11,12 @@
     <div class="p-4 space-y-4">
         <!-- Header -->
         <div class="flex items-center justify-between pb-2 border-b border-slate-100">
-            <h1 class="text-sm font-bold text-slate-800">🔍 Comparador de Precios</h1>
+            <h1 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                Comparador de Precios
+            </h1>
         </div>
 
         <!-- Input para agregar keyword -->
@@ -28,8 +33,18 @@
         <!-- Panel de estadísticas (oculto por defecto) -->
         <div id="stats-panel" class="hidden">
             <div class="flex items-center justify-between pb-2 border-b border-slate-100 mb-3">
-                <h2 class="text-xs font-bold text-slate-600 uppercase tracking-wider">📊 Estadísticas</h2>
-                <button id="close-stats-btn" class="text-xs text-slate-400 hover:text-slate-600">✕ Cerrar</button>
+                <h2 class="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Estadísticas
+                </h2>
+                <button id="close-stats-btn" class="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    Cerrar
+                </button>
             </div>
             <div id="stats-content" class="space-y-3 text-sm">
                 <!-- Contenido de estadísticas -->

@@ -28,7 +28,7 @@ export interface Product {
   seller: string | null;
 }
 
-export type Action = 'START_SCRAPING' | 'CANCEL_SCRAPING' | 'SCRAPING_PROGRESS' | 'SCRAPING_DONE' | 'SCRAPING_ERROR' | 'OPEN_TAB';
+export type Action = 'START_SCRAPING' | 'START_BOTH_SCRAPING' | 'CANCEL_SCRAPING' | 'SCRAPING_PROGRESS' | 'SCRAPING_DONE' | 'SCRAPING_ERROR' | 'OPEN_TAB';
 
 export type Site = 'Falabella' | 'MercadoLibre';
 

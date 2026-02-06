@@ -26,6 +26,7 @@ chrome.runtime.onConnect.addListener((port) => {
   orchestrator.onMessage(async (message: PortMessage) => {
     console.log('Background: Mensaje recibido:', message.type);
 
+    // Handler para scraping de un solo sitio
     if (message.type === 'START_SCRAPING' && message.payload.site && message.payload.keywordText) {
       const { keywordId, keywordText, site } = message.payload;
       
@@ -50,6 +51,41 @@ chrome.runtime.onConnect.addListener((port) => {
           }, 2000);
         }
       });
+    }
+
+    // Handler para scraping de AMBOS sitios simultáneamente
+    if (message.type === 'START_BOTH_SCRAPING' && message.payload.keywordText) {
+      const { keywordId, keywordText } = message.payload;
+      
+      await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.RUNNING);
+
+      const sites: Site[] = ['Falabella', 'MercadoLibre'];
+      
+      for (const site of sites) {
+        const url = SEARCH_URLS[site](keywordText);
+        const tab = await chrome.tabs.create({ 
+          url, 
+          active: false 
+        });
+
+        console.log(`Background: Tab ${tab.id} abierta para ${site} con keyword: ${keywordText}`);
+        
+        chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+          if (tabId === tab.id && info.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener);
+            
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tab.id!, {
+                action: 'START_SCRAPING',
+                keywordId,
+                keywordText,
+                site,
+                tabId: tab.id
+              });
+            }, 2000);
+          }
+        });
+      }
     }
 
     if (message.type === 'CANCEL_SCRAPING') {
