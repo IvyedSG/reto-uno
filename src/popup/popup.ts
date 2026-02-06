@@ -1,5 +1,6 @@
 import { StorageManager } from '../utils/storage-manager';
-import { PORT_NAMES, ScrapingUpdate } from '../types';
+import { PORT_NAMES, ScrapingUpdate, PortMessage } from '../types';
+import { PortManager } from '../utils/messaging';
 
 document.addEventListener('DOMContentLoaded', async () => {
     const keywordInput = document.getElementById('keyword-input') as HTMLInputElement;
@@ -8,30 +9,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     const loadingEl = document.getElementById('loading');
     const contentEl = document.getElementById('content');
 
-    let port: chrome.runtime.Port | null = null;
+    const searchPort = new PortManager();
 
     /**
      * Inicia el proceso de scraping para una keyword específica
      */
     const startScraping = (keywordId: string) => {
-        if (!port) {
-            port = chrome.runtime.connect({ name: PORT_NAMES.SEARCH });
+        if (!searchPort.isConnected()) {
+            searchPort.connect(PORT_NAMES.SEARCH);
             
-            port.onMessage.addListener((msg: ScrapingUpdate) => {
+            searchPort.onMessage((msg: PortMessage) => {
                 console.log('Popup: Mensaje del orquestador:', msg);
-                handleScrapingUpdate(msg);
+                handleScrapingUpdate(msg.payload);
             });
 
-            port.onDisconnect.addListener(() => {
+            searchPort.onDisconnect(() => {
                 console.log('Popup: Orquestador desconectado');
-                port = null;
             });
         }
 
         loadingEl?.classList.remove('hidden');
         contentEl?.classList.add('hidden');
 
-        port.postMessage({
+        searchPort.postMessage('START_SCRAPING', {
             action: 'START_SCRAPING',
             keywordId
         } as ScrapingUpdate);
@@ -129,10 +129,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    const bestOfferBtn = document.getElementById('best-offer-btn');
+    const configBtn = document.getElementById('config-btn');
+
     // Event Listeners
     addBtn?.addEventListener('click', handleAddKeyword);
     keywordInput?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') handleAddKeyword();
+    });
+
+    bestOfferBtn?.addEventListener('click', () => {
+        console.log('Popup: Ir a la mejor oferta');
+        // Por ahora solo log, luego implementaremos la lógica de apertura de URL
+    });
+
+    configBtn?.addEventListener('click', () => {
+        console.log('Popup: Abrir configuración');
     });
 
     // Carga inicial

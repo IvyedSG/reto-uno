@@ -39,5 +39,13 @@ export interface ScrapingUpdate {
 }
 
 export const PORT_NAMES = {
-  SEARCH: 'search-orchestrator'
-};
+  SEARCH: 'search-orchestrator',
+  CONTENT: 'content-bridge'
+} as const;
+
+export type PortName = typeof PORT_NAMES[keyof typeof PORT_NAMES];
+
+export interface PortMessage {
+  type: Action;
+  payload: ScrapingUpdate;
+}
