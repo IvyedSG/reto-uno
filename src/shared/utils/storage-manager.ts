@@ -1,9 +1,16 @@
-import { Keyword, KeywordStatus, Product } from '../types';
+/**
+ * Storage Manager - Chrome Extension Storage Operations
+ * 
+ * Handles all keyword and product storage operations with mutex
+ * to prevent race conditions when multiple scrapers finish simultaneously.
+ */
+
+import { Keyword, KeywordStatus, Product } from '../types/product.types';
 
 const STORAGE_KEYS = {
   KEYWORDS: 'keywords',
   PRODUCTS: 'products_'
-};
+} as const;
 
 // Mutex para serializar operaciones de guardado y evitar race conditions
 let saveLock: Promise<void> = Promise.resolve();

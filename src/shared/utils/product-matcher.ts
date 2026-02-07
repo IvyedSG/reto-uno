@@ -1,4 +1,11 @@
-import { Product } from '../types';
+/**
+ * Product Matcher - Groups similar products for price comparison
+ * 
+ * Uses token-based similarity matching (Jaccard index) to group
+ * products that appear in both Falabella and MercadoLibre.
+ */
+
+import { Product } from '../types/product.types';
 
 export interface SiteStats {
   count: number;
@@ -16,7 +23,7 @@ export interface GroupStats {
   falabella: SiteStats;
   meli: SiteStats;
   // Savings info
-  savings: number | null;  // Positive = savings buying from cheaperSite
+  savings: number | null;
   cheaperSite: 'Falabella' | 'MercadoLibre' | null;
   // Legacy compatibility
   meliCount: number;
@@ -35,7 +42,7 @@ export interface ProductGroup {
  * Utilidades para comparar títulos y precios y agrupar productos similares.
  * 
  * Criterio de similitud: Usa tokens significativos del título para agrupar productos.
- * Los productos se consideran similares si comparten al menos 60% de tokens significativos.
+ * Los productos se consideran similares si comparten al menos 50% de tokens significativos.
  * Se ignoran palabras comunes (stopwords) y se normalizan los títulos.
  */
 export class ProductMatcher {

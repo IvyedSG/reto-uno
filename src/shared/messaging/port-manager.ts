@@ -1,9 +1,12 @@
-import { Action, PortMessage, PortName } from '../types';
-
 /**
- * Gestor de comunicación por puertos (chrome.runtime.Port).
- * Proporciona un wrapper tipado para facilitar el envío y recepción de mensajes.
+ * Port Manager - Chrome Extension Port Communication
+ * 
+ * Provides a typed wrapper for chrome.runtime.Port to facilitate
+ * bidirectional communication between popup and background scripts.
  */
+
+import { Action, PortMessage, PortName } from '../types/message.types';
+
 export class PortManager {
   private port: chrome.runtime.Port | null = null;
 
