@@ -13,7 +13,6 @@ Este proyecto es una herramienta avanzada de comparación que permite a los usua
 - **Scraping Multi-sitio** – Extracción simultánea de datos en Falabella y MercadoLibre sin bloqueos.
 - **Agrupamiento Inteligente** – Motor `ProductMatcher` que identifica productos idénticos mediante tokens.
 - **Top 3 de Ofertas** – Acceso directo a los precios más bajos encontrados en toda la búsqueda.
-- **Interfaz de Usuario Premium** – Diseño moderno, responsivo y visualmente atractivo.
 - **Modos de Búsqueda** – Flexibilidad total con modos Rápido, Normal y Completo.
 
 ---
