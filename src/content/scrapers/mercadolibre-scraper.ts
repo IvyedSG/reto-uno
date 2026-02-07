@@ -3,9 +3,11 @@ import { Product } from '@/shared/types/product.types';
 
 export class MercadoLibreScraper extends BaseScraper {
   private readonly SELECTORS = {
-    cards: 'li.ui-search-layout__item',
-    titleLink: 'a.poly-component__title, a.ui-search-item__group__element.ui-search-link',
-    priceFraction: '.andes-money-amount__fraction'
+    cards: 'li.ui-search-layout__item, .poly-card',
+    titleLink: 'a.poly-component__title, a.ui-search-item__group__element.ui-search-link, .poly-component__title a',
+    priceContainer: '.andes-money-amount:not(.andes-money-amount--previous)',
+    priceFraction: '.andes-money-amount__fraction',
+    seller: '.poly-component__seller, .ui-search-official-store-item__link, .ui-search-item__group__element--seller'
   };
 
   constructor(keyword: string, keywordId: string, maxProducts: number = 100) {
@@ -28,9 +30,15 @@ export class MercadoLibreScraper extends BaseScraper {
         if (product && !this.isDuplicate(results, product)) {
           results.push(product);
         }
+
+        if ((i + 1) % 10 === 0 || i === cards.length - 1) {
+          const progress = Math.min(Math.round(((i + 1) / cards.length) * 100), 100);
+          this.reportProgress(progress, results);
+        }
       }
     } catch (error) {
       console.error('[MercadoLibre] Error de extracción:', error);
+      this.reportProgress(100, results);
     }
     
     return results;
@@ -38,22 +46,27 @@ export class MercadoLibreScraper extends BaseScraper {
 
   private extractProduct(card: HTMLElement, position: number): Product | null {
     const titleLink = card.querySelector(this.SELECTORS.titleLink) as HTMLAnchorElement;
-    if (!titleLink?.href) return null;
+    if (!titleLink) return null;
     
-    const priceEl = card.querySelector(this.SELECTORS.priceFraction);
-    const priceVisible = priceEl?.parentElement?.textContent?.trim() || '';
-    const priceNumeric = this.parseCurrencyPrice(priceEl?.textContent?.trim() || '');
+    const priceContainer = card.querySelector(this.SELECTORS.priceContainer);
+    if (!priceContainer) return null;
+
+    const fractionEl = priceContainer.querySelector(this.SELECTORS.priceFraction);
+    const priceVisible = fractionEl?.textContent?.trim() || '';
+    const priceNumeric = this.parseCurrencyPrice(priceVisible);
+    
     if (priceNumeric === null) return null;
 
-    const sellerEl = card.querySelector('.poly-component__seller');
+    const sellerEl = card.querySelector(this.SELECTORS.seller);
+    const imageUrl = (card.querySelector('img') as HTMLImageElement)?.src || '';
     
     return {
       id: crypto.randomUUID(),
       title: titleLink.textContent?.trim() || '',
       priceVisible: `S/ ${priceVisible}`,
       priceNumeric,
-      imageUrl: (card.querySelector('img') as HTMLImageElement)?.src || '',
-      url: titleLink.href,
+      imageUrl,
+      url: titleLink.href || '',
       site: 'MercadoLibre',
       scrapedAt: Date.now(),
       position,

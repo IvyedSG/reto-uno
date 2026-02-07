@@ -81,6 +81,11 @@ export class ScrapingOrchestrator {
       return;
     }
 
+    if (action === 'SCRAPING_PROGRESS') {
+      this.messenger.postMessage('SCRAPING_PROGRESS' as Action, update);
+      return;
+    }
+
     if (action === 'SCRAPING_DONE' && products) {
       await this.handlePageDone(keywordId, site, products);
     }
@@ -167,7 +172,7 @@ export class ScrapingOrchestrator {
         keywordId: state.keywordId,
         products: final
       });
-    } catch (e) { /* Popup cerrado */ }
+    } catch (e) {}
 
     this.states.delete(stateKey);
   }

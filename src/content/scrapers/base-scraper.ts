@@ -75,9 +75,18 @@ export abstract class BaseScraper {
   protected parseCurrencyPrice(priceText: string | null): number | null {
     if (!priceText) return null;
     
-    const clean = priceText.replace(/S\/\s*/gi, '').replace(/,/g, '').trim();
-    const num = parseFloat(clean);
+    let clean = priceText.replace(/S\/\s*/gi, '').trim();
     
+    if (clean.includes('.') && !clean.includes(',')) {
+      const parts = clean.split('.');
+      if (parts.length > 1 && parts[parts.length - 1].length === 3) {
+        clean = clean.replace(/\./g, '');
+      }
+    } else {
+      clean = clean.replace(/,/g, '');
+    }
+
+    const num = parseFloat(clean);
     return (!isNaN(num) && num > 0) ? Math.round(num) : null;
   }
 
