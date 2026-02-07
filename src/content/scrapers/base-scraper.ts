@@ -24,7 +24,7 @@ export abstract class BaseScraper {
       progress,
       products
     };
-    chrome.runtime.sendMessage(update);
+    window.dispatchEvent(new CustomEvent('scraping-progress', { detail: update }));
   }
 
   protected wait(ms: number): Promise<void> {

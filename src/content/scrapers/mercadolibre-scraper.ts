@@ -21,10 +21,10 @@ export class MercadoLibreScraper extends BaseScraper {
       
       const cards = document.querySelectorAll(this.SELECTORS.cards);
       
-      for (const card of cards) {
+      for (let i = 0; i < cards.length; i++) {
         if (results.length >= this.maxProducts) break;
         
-        const product = this.extractProduct(card as HTMLElement);
+        const product = this.extractProduct(cards[i] as HTMLElement, i + 1);
         if (product && !this.isDuplicate(results, product)) {
           results.push(product);
         }
@@ -36,22 +36,28 @@ export class MercadoLibreScraper extends BaseScraper {
     return results;
   }
 
-  private extractProduct(card: HTMLElement): Product | null {
+  private extractProduct(card: HTMLElement, position: number): Product | null {
     const titleLink = card.querySelector(this.SELECTORS.titleLink) as HTMLAnchorElement;
     if (!titleLink?.href) return null;
     
     const priceEl = card.querySelector(this.SELECTORS.priceFraction);
+    const priceVisible = priceEl?.parentElement?.textContent?.trim() || '';
     const priceNumeric = this.parseCurrencyPrice(priceEl?.textContent?.trim() || '');
     if (priceNumeric === null) return null;
+
+    const sellerEl = card.querySelector('.poly-component__seller');
     
     return {
       id: crypto.randomUUID(),
       title: titleLink.textContent?.trim() || '',
+      priceVisible: `S/ ${priceVisible}`,
       priceNumeric,
       imageUrl: (card.querySelector('img') as HTMLImageElement)?.src || '',
       url: titleLink.href,
       site: 'MercadoLibre',
-      scrapedAt: Date.now()
+      scrapedAt: Date.now(),
+      position,
+      seller: sellerEl?.textContent?.replace(/por\s+/i, '').trim() || null
     };
   }
 }

@@ -49,17 +49,33 @@ bun run build
 
 ---
 
-## Criterio de Similitud
+## Arquitectura Técnica
+
+### 1. Comunicación Persistente (`Messaging`)
+
+- **Ports (`tabs.connect`)**: Se utiliza una conexión bidireccional persistente entre el Background Script y los Content Scripts. Esto garantiza que el flujo de datos (START, PROGRESS, DONE, ERROR) sea fluido y tolerante a desconexiones.
+- **Port Manager**: Wrapper tipado para `chrome.runtime.Port` que facilita la gestión de mensajes en el popup y background.
+
+### 2. Estructura de Datos Normalizada
+
+Cada producto se extrae y almacena con la siguiente estructura:
+
+- `site`, `keywordId`, `scrapedAt`, `position` (Posición en el listado original).
+- `title`, `priceVisible` (texto original), `priceNumeric` (valor para cálculos).
+- `imageUrl`, `url`, `brand`, `seller` (opcionales).
+
+---
+
+## Criterio de Similitud (Matching Algorithm)
 
 La extensión utiliza un motor de coincidencia inteligente (`ProductMatcher`) para agrupar productos similares. El criterio se basa en:
 
-1. **Normalización de Texto**: Eliminamos acentos, caracteres especiales y convertimos todo a minúsculas.
-2. **Tokenización Inteligente**: Comparamos las palabras clave significativas de los títulos.
-3. **Puntaje de Similitud**:
-   - Se ignoran palabras comunes (conectores, artículos).
-   - Se requiere un umbral mínimo de coincidencia de tokens entre dos productos para considerarlos "Similares".
-   - El algoritmo prioriza coincidencias de **Marca** y **Modelo** detectadas orgánicamente en el título.
-4. **Agrupamiento**: Los productos que superan el umbral se consolidan en grupos, permitiendo calcular el ahorro directo por el "mismo objeto".
+1. **Normalización de Texto**: Eliminación de acentos, caracteres especiales y conversión a minúsculas (NFD normalization).
+2. **Tokenización Inteligente**: Extracción de palabras clave, omitiendo _stopwords_ (conectores, artículos).
+3. **Puntaje de Similitud (Jaccard Index)**:
+   - Se requiere un umbral mínimo de coincidencia (> 0.5) entre tokens para considerar productos como similares.
+   - Priorización de coincidencias en marca y modelo detectados en el título.
+4. **Ranking de Ahorro**: Los grupos se ordenan automáticamente según la oportunidad de ahorro directo (diferencia de precios mínimos entre tiendas).
 
 ## Star History
 

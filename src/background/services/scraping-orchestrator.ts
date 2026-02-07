@@ -131,7 +131,12 @@ export class ScrapingOrchestrator {
       const scriptFile = state.site === 'Falabella' ? 'content/falabella.js' : 'content/meli.js';
       await TabManager.injectScript(tabId, scriptFile);
 
-      await TabManager.sendMessage(tabId, {
+      const port = await TabManager.connect(tabId);
+      port.onMessage.addListener((msg: ScrapingUpdate) => {
+        this.handleScrapingUpdate(msg);
+      });
+
+      TabManager.sendMessage(tabId, {
         action: 'START_SCRAPING' as Action,
         keywordId: state.keywordId,
         keywordText: state.keywordText,

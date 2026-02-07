@@ -21,10 +21,10 @@ export class FalabellaScraper extends BaseScraper {
     
     const cards = this.findAll(this.SELECTORS.productCards);
 
-    for (const card of cards) {
+    for (let i = 0; i < cards.length; i++) {
       if (results.length >= this.maxProducts) break;
       
-      const product = this.extractProduct(card as HTMLElement);
+      const product = this.extractProduct(cards[i] as HTMLElement, i + 1);
       if (product && !this.isDuplicate(results, product)) {
         results.push(product);
       }
@@ -36,7 +36,7 @@ export class FalabellaScraper extends BaseScraper {
     return results;
   }
 
-  private extractProduct(card: HTMLElement): Product | null {
+  private extractProduct(card: HTMLElement, position: number): Product | null {
     const url = (card as HTMLAnchorElement).href || '';
     if (!url) return null;
 
@@ -47,17 +47,22 @@ export class FalabellaScraper extends BaseScraper {
     const title = nameEl?.textContent?.trim() || brandEl?.textContent?.trim() || '';
     if (!title) return null;
 
-    const priceNumeric = this.parseCurrencyPrice(priceEl?.textContent?.trim() || '');
+    const priceVisible = priceEl?.textContent?.trim() || '';
+    const priceNumeric = this.parseCurrencyPrice(priceVisible);
     if (priceNumeric === null) return null;
 
     return {
       id: crypto.randomUUID(),
       title,
+      priceVisible,
       priceNumeric,
       imageUrl: (card.querySelector('img') as HTMLImageElement)?.src || '',
       url,
       site: 'Falabella',
-      scrapedAt: Date.now()
+      scrapedAt: Date.now(),
+      position,
+      brand: brandEl?.textContent?.trim() || null,
+      seller: null
     };
   }
 }

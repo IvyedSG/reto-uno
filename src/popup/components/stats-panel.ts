@@ -117,7 +117,11 @@ function renderProductGroups(groups: ProductGroup[]): string {
               <div class="space-y-1 ml-4">
                 ${falabellaProds.map(p => `
                   <a href="${p.url}" target="_blank" class="product-link flex items-start gap-1 text-[11px] hover:bg-slate-50 rounded p-0.5 cursor-pointer group" data-url="${p.url}">
-                    <span class="text-slate-700 flex-1 truncate group-hover:text-blue-600">${p.title.substring(0, 40)}${p.title.length > 40 ? '...' : ''}</span>
+                    <span class="text-slate-400 font-medium min-w-[15px]">#${p.position}</span>
+                    <div class="flex-1 min-w-0">
+                      <span class="text-slate-700 block truncate group-hover:text-blue-600">${p.title.substring(0, 40)}${p.title.length > 40 ? '...' : ''}</span>
+                      ${p.brand || p.seller ? `<span class="text-[9px] text-slate-400 font-medium">${p.brand || p.seller}</span>` : ''}
+                    </div>
                     <span class="font-bold text-green-600 whitespace-nowrap">S/ ${p.priceNumeric?.toFixed(0) ?? '-'}</span>
                     <span class="text-slate-400 group-hover:text-blue-500">${ICONS.externalLink}</span>
                   </a>
@@ -134,7 +138,11 @@ function renderProductGroups(groups: ProductGroup[]): string {
               <div class="space-y-1 ml-4">
                 ${meliProds.map(p => `
                   <a href="${p.url}" target="_blank" class="product-link flex items-start gap-1 text-[11px] hover:bg-slate-50 rounded p-0.5 cursor-pointer group" data-url="${p.url}">
-                    <span class="text-slate-700 flex-1 truncate group-hover:text-blue-600">${p.title.substring(0, 40)}${p.title.length > 40 ? '...' : ''}</span>
+                    <span class="text-slate-400 font-medium min-w-[15px]">#${p.position}</span>
+                    <div class="flex-1 min-w-0">
+                      <span class="text-slate-700 block truncate group-hover:text-blue-600">${p.title.substring(0, 40)}${p.title.length > 40 ? '...' : ''}</span>
+                      ${p.brand || p.seller ? `<span class="text-[9px] text-slate-400 font-medium">${p.brand || p.seller}</span>` : ''}
+                    </div>
                     <span class="font-bold text-green-600 whitespace-nowrap">S/ ${p.priceNumeric?.toFixed(0) ?? '-'}</span>
                     <span class="text-slate-400 group-hover:text-blue-500">${ICONS.externalLink}</span>
                   </a>
