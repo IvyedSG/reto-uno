@@ -1,6 +1,6 @@
-import { Keyword, Product } from '../../shared/types/product.types';
-import { ProductMatcher, ProductGroup, SiteStats } from '../../shared/utils/product-matcher';
-import { ICONS } from './icons';
+import { Keyword, Product } from '@/shared/types/product.types';
+import { ProductMatcher, ProductGroup, SiteStats } from '@/shared/utils/product-matcher';
+import { ICONS } from '@/popup/components/icons';
 
 function renderSiteStatsCard(siteName: string, stats: SiteStats | null): string {
   if (!stats) {
@@ -47,7 +47,7 @@ function renderTopOffers(products: Product[]): string {
                 <p class="text-[11px] text-slate-700 truncate hover:text-blue-600" title="${item.title}">${item.title}</p>
                 <div class="flex items-center gap-2">
                   <span class="font-bold text-green-600 text-xs">S/ ${item.priceNumeric?.toFixed(2)}</span>
-                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase">${item.site === 'Falabella' ? 'Falabella' : 'Meli'}</span>
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${item.site === 'Falabella' ? 'site-tag-falabella' : 'site-tag-meli'}">${item.site === 'Falabella' ? 'Falabella' : 'Meli'}</span>
                 </div>
               </div>
             </div>
@@ -87,13 +87,13 @@ function renderProductGroups(groups: ProductGroup[]): string {
           
           <div class="flex gap-4 text-xs mt-1 mb-2">
             <span class="flex items-center gap-1.5">
-              <span class="text-[9px] font-bold text-emerald-600/70">FALABELLA</span>
-              <span class="text-slate-400 font-medium">${falabella.count}<span class="text-[9px] ml-0.5 inline-block opacity-70">u.</span></span>
+              <span class="h-3 flex items-center opacity-80">${ICONS.falabella}</span>
+              <span class="text-slate-400 font-medium">${falabella.count}</span>
               <span class="font-bold text-emerald-600">${formatPrice(falabella.min)}</span>
             </span>
             <span class="flex items-center gap-1.5">
-              <span class="text-[9px] font-bold text-yellow-600/70">MELI</span>
-              <span class="text-slate-400 font-medium">${meli.count}<span class="text-[9px] ml-0.5 inline-block opacity-70">u.</span></span>
+              <span class="h-3 flex items-center opacity-80">${ICONS.meli}</span>
+              <span class="text-slate-400 font-medium">${meli.count}</span>
               <span class="font-bold text-emerald-600">${formatPrice(meli.min)}</span>
             </span>
           </div>
@@ -112,7 +112,7 @@ function renderProductGroups(groups: ProductGroup[]): string {
             ${falabellaProds.length > 0 ? `
             <div class="mb-2">
               <div class="flex items-center gap-1 text-[10px] font-bold text-emerald-600 mb-1 uppercase tracking-tight">
-                <span>Falabella (${falabellaProds.length} productos)</span>
+                <span class="px-1.5 py-0.5 rounded site-tag-falabella">Falabella (${falabellaProds.length})</span>
               </div>
               <div class="space-y-1 ml-4">
                 ${falabellaProds.map(p => `
@@ -129,7 +129,7 @@ function renderProductGroups(groups: ProductGroup[]): string {
             ${meliProds.length > 0 ? `
             <div>
               <div class="flex items-center gap-1 text-[10px] font-bold text-yellow-600 mb-1 uppercase tracking-tight">
-                <span>MercadoLibre (${meliProds.length} productos)</span>
+                <span class="px-1.5 py-0.5 rounded site-tag-meli">MercadoLibre (${meliProds.length})</span>
               </div>
               <div class="space-y-1 ml-4">
                 ${meliProds.map(p => `

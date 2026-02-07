@@ -1,7 +1,7 @@
-import { Keyword, KeywordStatus } from '../../shared/types/product.types';
-import { Site } from '../../shared/types/scraper.types';
-import { ICONS } from './icons';
-import { getStatusClass, getStatusIcon, getStatusText } from './status-indicator';
+import { Keyword, KeywordStatus } from '@/shared/types/product.types';
+import { Site } from '@/shared/types/scraper.types';
+import { ICONS } from '@/popup/components/icons';
+import { getStatusClass, getStatusIcon, getStatusText } from '@/popup/components/status-indicator';
 
 export interface KeywordListHandlers {
   onSearchSite: (keywordId: string, site: Site) => void;
@@ -65,7 +65,6 @@ function renderKeywordCard(k: Keyword): string {
       
       <div class="flex items-center gap-3 text-[10px]">
         <span class="status-badge ${getStatusClass(k.status)}">${getStatusIcon(k.status)} ${getStatusText(k.status)}</span>
-        <span class="text-slate-400">Productos: ${k.productCount}</span>
         <span class="text-slate-400">Productos: ${k.productCount}</span>
         ${(falabellaDone || mercadoLibreDone) && !bothDone ? `
           <span class="text-sky-500 flex items-center gap-1">

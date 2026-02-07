@@ -1,60 +1,57 @@
-import { BaseScraper } from './base-scraper';
-import { Product } from '../../shared/types/product.types';
+import { BaseScraper } from '@/content/scrapers/base-scraper';
+import { Product } from '@/shared/types/product.types';
 
 export class MercadoLibreScraper extends BaseScraper {
-  constructor(keyword: string, keywordId: string, maxProducts: number = 100) {
-    super(keyword, keywordId, maxProducts, 'MercadoLibre');
-  }
+  private readonly SELECTORS = {
+    cards: 'li.ui-search-layout__item',
+    titleLink: 'a.poly-component__title, a.ui-search-item__group__element.ui-search-link',
+    priceFraction: '.andes-money-amount__fraction'
+  };
 
-  protected getProductSelector(): string {
-    return 'li.ui-search-layout__item';
+  constructor(keyword: string, keywordId: string, maxProducts: number = 100) {
+    super('MercadoLibre', keyword, keywordId, maxProducts);
   }
 
   async scrape(): Promise<Product[]> {
-    const products: Product[] = [];
+    const results: Product[] = [];
     
     try {
-      await this.waitForElements(this.getProductSelector(), 5000);
-      await this.autoScroll(5);
+      await this.waitForElements(this.SELECTORS.cards, 5000);
+      await this.scrollFullPage(5, 100);
       
-      const productContainers = document.querySelectorAll(this.getProductSelector());
+      const cards = document.querySelectorAll(this.SELECTORS.cards);
       
-      for (const container of productContainers) {
-        if (products.length >= this.maxProducts) break;
+      for (const card of cards) {
+        if (results.length >= this.maxProducts) break;
         
-        const titleEl = container.querySelector('.ui-search-item__title');
-        const priceEl = container.querySelector('.ui-search-price__second-line .andes-money-amount__fraction');
-        const linkEl = container.querySelector('a.ui-search-link');
-        const imgEl = container.querySelector('.ui-search-result-image__element');
-
-        if (titleEl && priceEl && linkEl) {
-          const title = titleEl.textContent?.trim() || '';
-          const priceText = priceEl.textContent?.trim() || '';
-          const price = this.parseCurrencyPrice(priceText);
-          const url = (linkEl as HTMLAnchorElement).href;
-          const imageUrl = (imgEl as HTMLImageElement)?.src || '';
-
-          if (price !== null) {
-            const product: Product = {
-              id: crypto.randomUUID(),
-              title,
-              priceNumeric: price,
-              imageUrl,
-              url,
-              site: 'MercadoLibre',
-              scrapedAt: Date.now()
-            };
-
-            if (!this.isDuplicate(products, product)) {
-              products.push(product);
-            }
-          }
+        const product = this.extractProduct(card as HTMLElement);
+        if (product && !this.isDuplicate(results, product)) {
+          results.push(product);
         }
       }
     } catch (error) {
-      console.error('[MercadoLibre] Error:', error);
+      console.error('[MercadoLibre] Error de extracción:', error);
     }
     
-    return products;
+    return results;
+  }
+
+  private extractProduct(card: HTMLElement): Product | null {
+    const titleLink = card.querySelector(this.SELECTORS.titleLink) as HTMLAnchorElement;
+    if (!titleLink?.href) return null;
+    
+    const priceEl = card.querySelector(this.SELECTORS.priceFraction);
+    const priceNumeric = this.parseCurrencyPrice(priceEl?.textContent?.trim() || '');
+    if (priceNumeric === null) return null;
+    
+    return {
+      id: crypto.randomUUID(),
+      title: titleLink.textContent?.trim() || '',
+      priceNumeric,
+      imageUrl: (card.querySelector('img') as HTMLImageElement)?.src || '',
+      url: titleLink.href,
+      site: 'MercadoLibre',
+      scrapedAt: Date.now()
+    };
   }
 }

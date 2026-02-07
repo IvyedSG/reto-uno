@@ -1,5 +1,5 @@
-import { KeywordStatus } from '../../shared/types/product.types';
-import { ICONS } from './icons';
+import { KeywordStatus } from '@/shared/types/product.types';
+import { ICONS } from '@/popup/components/icons';
 
 export function getStatusClass(status: KeywordStatus): string {
   const classes: Record<KeywordStatus, string> = {

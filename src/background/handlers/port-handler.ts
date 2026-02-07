@@ -1,6 +1,6 @@
-import { PORT_NAMES, PortMessage } from '../../shared/types/message.types';
-import { PortManager } from '../../shared/messaging/port-manager';
-import { ScrapingOrchestrator } from '../services/scraping-orchestrator';
+import { PORT_NAMES, PortMessage } from '@/shared/types/message.types';
+import { PortManager } from '@/shared/messaging/port-manager';
+import { ScrapingOrchestrator } from '@/background/services/scraping-orchestrator';
 
 export class PortHandler {
   constructor(

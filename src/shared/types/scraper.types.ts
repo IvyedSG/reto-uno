@@ -1,7 +1,3 @@
-/**
- * Scraper-related types and configuration
- */
-
 export type Site = 'Falabella' | 'MercadoLibre';
 
 export type ScrapingMode = 'fast' | 'normal' | 'complete';

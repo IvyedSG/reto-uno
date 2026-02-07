@@ -1,4 +1,4 @@
-import { Product } from '../types/product.types';
+import { Product } from '@/shared/types/product.types';
 
 export interface SiteStats {
   count: number;

@@ -1,18 +1,11 @@
-/**
- * Content Bridge - Shared logic for content script entry points
- */
-
-import { ScrapingUpdate, Action } from '../shared/types/message.types';
-import { Site } from '../shared/types/scraper.types';
+import { ScrapingUpdate, Action } from '@/shared/types/message.types';
+import { Site } from '@/shared/types/scraper.types';
 
 export interface ScraperInstance {
   scrape(): Promise<any[]>;
 }
 
 export class ContentBridge {
-  /**
-   * Initialize a listener for the START_SCRAPING message
-   */
   static listen(site: Site, createScraper: (kw: string, id: string, max: number) => ScraperInstance) {
     chrome.runtime.onMessage.addListener((message: ScrapingUpdate, _sender, sendResponse) => {
       if (message.action === 'START_SCRAPING' && message.keywordText) {

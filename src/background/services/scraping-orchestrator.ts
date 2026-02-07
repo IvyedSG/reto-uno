@@ -1,160 +1,169 @@
-import { PortManager } from '../../shared/messaging/port-manager';
-import { ScrapingUpdate, ScrapingMode } from '../../shared/types/message.types';
-import { Product, KeywordStatus } from '../../shared/types/product.types';
-import { Site } from '../../shared/types/scraper.types';
-import { TabManager } from './tab-manager';
-import { StorageManager } from '../../shared/utils/storage-manager';
+import { Action, ScrapingUpdate } from '@/shared/types/message.types';
+import { Product, KeywordStatus } from '@/shared/types/product.types';
+import { Site } from '@/shared/types/scraper.types';
+import { SEARCH_URLS, TIMEOUTS } from '@/shared/constants/scraper-config';
+import { StorageManager } from '@/shared/utils/storage-manager';
+import { PortManager } from '@/shared/messaging/port-manager';
+import { TabManager } from '@/background/services/tab-manager';
 
+interface ScrapingState {
+  keywordId: string;
+  keywordText: string;
+  site: Site;
+  currentPage: number;
+  maxPages: number;
+  maxProducts: number;
+  allProducts: Product[];
+  isActive: boolean;
+}
+
+/**
+ * Orquestador principal del proceso de scraping multitienda y multipágina.
+ */
 export class ScrapingOrchestrator {
-  private activeScraping: Map<string, {
-    keywordText: string;
-    site: Site;
-    mode: ScrapingMode;
-    products: Product[];
-    totalExpected: number;
-    pagesScraped: number;
-    maxPages: number;
-  }> = new Map();
+  private states: Map<string, ScrapingState> = new Map();
 
   constructor(private messenger: PortManager) {}
 
+  private getStateKey(keywordId: string, site: Site): string {
+    return `${keywordId}:${site}`;
+  }
+
+  /**
+   * Inicia el flujo de scraping para un sitio específico.
+   */
   async startScraping(update: ScrapingUpdate) {
     const { keywordId, keywordText, site, maxProducts, maxPages } = update;
     if (!keywordId || !keywordText || !site) return;
 
-    this.activeScraping.set(keywordId, {
+    const stateKey = this.getStateKey(keywordId, site);
+    console.log(`[Orquestador] Iniciando ${site} para: ${keywordText}`);
+
+    this.states.set(stateKey, {
+      keywordId,
       keywordText,
       site,
-      mode: update.scrapingMode || 'fast',
-      products: [],
-      totalExpected: maxProducts || 100,
-      pagesScraped: 0,
-      maxPages: maxPages || 1
+      currentPage: 1,
+      maxPages: maxPages || 1,
+      maxProducts: maxProducts || 100,
+      allProducts: [],
+      isActive: true
     });
 
-    await this.scrapePage(keywordId, 0);
+    await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.RUNNING);
+    await this.scrapeCurrentPage(stateKey);
   }
 
-  private async scrapePage(keywordId: string, pageIndex: number) {
-    const session = this.activeScraping.get(keywordId);
-    if (!session) return;
-
-    const url = this.buildUrl(session.site, session.keywordText, pageIndex);
-    
-    try {
-      const tabId = await TabManager.createTab(url);
-      
-      const response = await this.sendMessageToTab(tabId, {
-        action: 'START_SCRAPING',
-        keywordId,
-        keywordText: session.keywordText,
-        site: session.site,
-        maxProducts: session.totalExpected
-      });
-
-      if (response && response.success) {
-        console.log(`[Orchestrator] Página ${pageIndex + 1} iniciada en tab ${tabId}`);
-      }
-    } catch (error) {
-      console.error('[Orchestrator] Error al abrir pestaña:', error);
-      this.handleScrapingError(keywordId, String(error));
+  /**
+   * Cancela cualquier proceso activo para una keyword.
+   */
+  async cancelScraping(keywordId: string): Promise<void> {
+    for (const site of ['Falabella', 'MercadoLibre'] as Site[]) {
+      const stateKey = this.getStateKey(keywordId, site);
+      const state = this.states.get(stateKey);
+      if (state) state.isActive = false;
+      this.states.delete(stateKey);
     }
+    await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.CANCELLED);
+    await TabManager.closeActiveTab();
   }
 
-  private buildUrl(site: Site, keyword: string, pageIndex: number): string {
-    const encodedKW = encodeURIComponent(keyword);
-    if (site === 'Falabella') {
-      return `https://www.falabella.com.pe/falabella-pe/search?Ntt=${encodedKW}${pageIndex > 0 ? `&page=${pageIndex + 1}` : ''}`;
-    } else {
-      const offset = pageIndex * 48 + 1;
-      return `https://listado.mercadolibre.com.pe/${encodedKW}${pageIndex > 0 ? `_Desde_${offset}_NoIndex_True` : ''}`;
-    }
-  }
-
+  /**
+   * Procesa las actualizaciones enviadas por los content scripts.
+   */
   async handleScrapingUpdate(update: ScrapingUpdate) {
-    const { action, keywordId, products, error } = update;
-    if (!keywordId) return;
+    const { action, keywordId, site, products, error } = update;
+    if (!keywordId || !site) return;
 
     if (action === 'SCRAPING_ERROR') {
-      this.handleScrapingError(keywordId, error || 'Error desconocido');
+      console.error(`[Orquestador] Error en ${site}:`, error);
+      await this.finalizeScraping(this.getStateKey(keywordId, site));
       return;
     }
 
     if (action === 'SCRAPING_DONE' && products) {
-      await this.processPageResults(keywordId, products);
+      await this.handlePageDone(keywordId, site, products);
     }
   }
 
-  private async processPageResults(keywordId: string, newProducts: Product[]) {
-    const session = this.activeScraping.get(keywordId);
-    if (!session) return;
-
-    session.products.push(...newProducts);
-    session.pagesScraped++;
+  private async handlePageDone(keywordId: string, site: Site, products: Product[]): Promise<void> {
+    const stateKey = this.getStateKey(keywordId, site);
+    const state = this.states.get(stateKey);
 
     await TabManager.closeActiveTab();
 
-    const reachedLimit = session.products.length >= session.totalExpected;
-    const noMoreResults = newProducts.length === 0;
-    const lastPage = session.pagesScraped >= session.maxPages;
+    if (!state || !state.isActive) return;
 
-    if (reachedLimit || noMoreResults || lastPage) {
-      await this.finalizeScraping(keywordId);
+    state.allProducts.push(...products);
+    console.log(`[Orquestador] ${site}: ${state.allProducts.length} productos acumulados`);
+
+    const reachedLimit = state.allProducts.length >= state.maxProducts;
+    const noMoreResults = products.length === 0;
+    const lastPageReached = state.currentPage >= state.maxPages;
+
+    if (reachedLimit || noMoreResults || lastPageReached) {
+      await this.finalizeScraping(stateKey);
     } else {
-      await this.scrapePage(keywordId, session.pagesScraped);
+      await this.continueToNextPage(stateKey);
     }
   }
 
-  private async finalizeScraping(keywordId: string) {
-    const session = this.activeScraping.get(keywordId);
-    if (!session) return;
+  private async continueToNextPage(stateKey: string): Promise<void> {
+    const state = this.states.get(stateKey);
+    if (!state || !state.isActive) return;
 
-    const finalProducts = session.products.slice(0, session.totalExpected);
-    await StorageManager.saveProducts(keywordId, finalProducts);
-    await StorageManager.markSiteDone(keywordId, session.site);
+    state.currentPage++;
+    await this.scrapeCurrentPage(stateKey);
+  }
+
+  private async scrapeCurrentPage(stateKey: string): Promise<void> {
+    const state = this.states.get(stateKey);
+    if (!state || !state.isActive) return;
+
+    const url = SEARCH_URLS[state.site](state.keywordText, state.currentPage);
+    
+    try {
+      const tabId = await TabManager.createTab(url, false);
+      await TabManager.waitForLoad(tabId);
+      
+      await new Promise(resolve => setTimeout(resolve, TIMEOUTS.BETWEEN_PAGES));
+
+      const scriptFile = state.site === 'Falabella' ? 'content/falabella.js' : 'content/meli.js';
+      await TabManager.injectScript(tabId, scriptFile);
+
+      await TabManager.sendMessage(tabId, {
+        action: 'START_SCRAPING' as Action,
+        keywordId: state.keywordId,
+        keywordText: state.keywordText,
+        site: state.site,
+        maxProducts: state.maxProducts
+      });
+    } catch (error) {
+      console.error(`[Orquestador] Error en navegación:`, error);
+      await this.finalizeScraping(stateKey);
+    }
+  }
+
+  private async finalizeScraping(stateKey: string): Promise<void> {
+    const state = this.states.get(stateKey);
+    if (!state) return;
+
+    state.isActive = false;
+
+    const final = state.allProducts.slice(0, state.maxProducts);
+    if (final.length > 0) {
+      await StorageManager.saveProducts(state.keywordId, final);
+    }
+
+    await StorageManager.markSiteDone(state.keywordId, state.site);
 
     try {
-      this.messenger.postMessage('SCRAPING_DONE', {
-        keywordId,
-        products: finalProducts
+      this.messenger.postMessage('SCRAPING_DONE' as Action, {
+        keywordId: state.keywordId,
+        products: final
       });
     } catch (e) { /* Popup cerrado */ }
 
-    this.activeScraping.delete(keywordId);
-  }
-
-  private handleScrapingError(keywordId: string, error: string) {
-    console.error(`[Orchestrator] Error en ${keywordId}:`, error);
-    this.activeScraping.delete(keywordId);
-    StorageManager.updateKeywordStatus(keywordId, KeywordStatus.ERROR);
-  }
-
-  private sendMessageToTab(tabId: number, message: any): Promise<any> {
-    return new Promise((resolve) => {
-      let retryCount = 0;
-      const maxRetries = 10;
-      
-      const trySend = () => {
-        chrome.tabs.sendMessage(tabId, message, (response) => {
-          if (chrome.runtime.lastError) {
-            if (retryCount < maxRetries) {
-              retryCount++;
-              setTimeout(trySend, 500);
-            } else {
-              resolve({ success: false, error: chrome.runtime.lastError.message });
-            }
-          } else {
-            resolve(response);
-          }
-        });
-      };
-      
-      setTimeout(trySend, 1500);
-    });
-  }
-
-  async cancelScraping(keywordId: string) {
-    this.activeScraping.delete(keywordId);
-    await TabManager.closeActiveTab();
+    this.states.delete(stateKey);
   }
 }

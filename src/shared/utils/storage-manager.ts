@@ -1,4 +1,4 @@
-import { Keyword, KeywordStatus, Product } from '../types/product.types';
+import { Keyword, KeywordStatus, Product } from '@/shared/types/product.types';
 
 const STORAGE_KEYS = {
   KEYWORDS: 'keywords',

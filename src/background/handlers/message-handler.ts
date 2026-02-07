@@ -1,5 +1,5 @@
-import { ScrapingUpdate } from '../../shared/types/message.types';
-import { ScrapingOrchestrator } from '../services/scraping-orchestrator';
+import { ScrapingUpdate } from '@/shared/types/message.types';
+import { ScrapingOrchestrator } from '@/background/services/scraping-orchestrator';
 
 export class MessageHandler {
   constructor(private orchestrator: ScrapingOrchestrator) {}

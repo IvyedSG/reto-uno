@@ -1,9 +1,5 @@
-/**
- * Message-related types for extension communication
- */
-
-import type { Product } from './product.types';
-import type { Site, ScrapingMode } from './scraper.types';
+import type { Product } from '@/shared/types/product.types';
+import type { Site, ScrapingMode } from '@/shared/types/scraper.types';
 export type { Site, ScrapingMode };
 
 export type Action = 

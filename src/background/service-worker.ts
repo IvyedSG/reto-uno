@@ -1,7 +1,7 @@
-import { PortManager } from '../shared/messaging/port-manager';
-import { ScrapingOrchestrator } from './services/scraping-orchestrator';
-import { PortHandler } from './handlers/port-handler';
-import { MessageHandler } from './handlers/message-handler';
+import { PortManager } from '@/shared/messaging/port-manager';
+import { ScrapingOrchestrator } from '@/background/services/scraping-orchestrator';
+import { PortHandler } from '@/background/handlers/port-handler';
+import { MessageHandler } from '@/background/handlers/message-handler';
 
 chrome.runtime.onInstalled.addListener(() => {
   // Inicializado

@@ -1,4 +1,4 @@
-import { TIMEOUTS } from '../../shared/constants/scraper-config';
+import { TIMEOUTS } from '@/shared/constants/scraper-config';
 
 export class TabManager {
   private static activeTabId: number | null = null;

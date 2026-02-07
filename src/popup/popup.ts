@@ -1,12 +1,12 @@
-import { StorageManager } from '../shared/utils/storage-manager';
-import { PortManager } from '../shared/messaging/port-manager';
-import { PORT_NAMES, ScrapingUpdate } from '../shared/types/message.types';
-import { KeywordStatus } from '../shared/types/product.types';
-import { Site, ScrapingMode } from '../shared/types/scraper.types';
-import { SCRAPING_LIMITS } from '../shared/constants/scraper-config';
+import { StorageManager } from '@/shared/utils/storage-manager';
+import { PortManager } from '@/shared/messaging/port-manager';
+import { PORT_NAMES, ScrapingUpdate } from '@/shared/types/message.types';
+import { KeywordStatus } from '@/shared/types/product.types';
+import { Site, ScrapingMode } from '@/shared/types/scraper.types';
+import { SCRAPING_LIMITS } from '@/shared/constants/scraper-config';
 
-import { renderKeywordList, KeywordListHandlers } from './components/keyword-list';
-import { renderStatsPanel, attachStatsPanelHandlers } from './components/stats-panel';
+import { renderKeywordList, KeywordListHandlers } from '@/popup/components/keyword-list';
+import { renderStatsPanel, attachStatsPanelHandlers } from '@/popup/components/stats-panel';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const keywordInput = document.getElementById('keyword-input') as HTMLInputElement;

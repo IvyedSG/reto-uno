@@ -1,37 +1,63 @@
-import { Product } from '../../shared/types/product.types';
-import { Site } from '../../shared/types/scraper.types';
+import { Product } from '@/shared/types/product.types';
+import { ScrapingUpdate } from '@/shared/types/message.types';
 
 export abstract class BaseScraper {
-  constructor(
-    protected keywordText: string,
-    protected keywordId: string,
-    protected maxProducts: number,
-    protected site: Site
-  ) {}
+  protected siteName: 'Falabella' | 'MercadoLibre';
+  protected keyword: string;
+  protected keywordId: string;
+  protected maxProducts: number;
+
+  constructor(siteName: 'Falabella' | 'MercadoLibre', keyword: string, keywordId: string, maxProducts: number) {
+    this.siteName = siteName;
+    this.keyword = keyword;
+    this.keywordId = keywordId;
+    this.maxProducts = maxProducts;
+  }
 
   abstract scrape(): Promise<Product[]>;
 
-  protected async autoScroll(maxScrolls: number = 20): Promise<void> {
-    let scrolls = 0;
-    while (scrolls < maxScrolls) {
-      window.scrollTo(0, document.body.scrollHeight);
-      await this.sleep(100);
-      scrolls++;
-      
-      if (document.querySelectorAll(this.getProductSelector()).length >= this.maxProducts) {
-        break;
-      }
-    }
-  }
-
-  protected abstract getProductSelector(): string;
-
-  protected sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  protected reportProgress(progress: number, products?: Product[]) {
+    const update: ScrapingUpdate = {
+      action: 'SCRAPING_PROGRESS',
+      keywordId: this.keywordId,
+      site: this.siteName,
+      progress,
+      products
+    };
+    chrome.runtime.sendMessage(update);
   }
 
   protected wait(ms: number): Promise<void> {
-    return this.sleep(ms);
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  protected findOne(parent: Element | Document, selectors: string[]): Element | null {
+    for (const selector of selectors) {
+      const el = parent.querySelector(selector);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  protected findAll(selectors: string[]): Element[] {
+    for (const selector of selectors) {
+      const els = document.querySelectorAll(selector);
+      if (els.length > 0) return Array.from(els);
+    }
+    return [];
+  }
+
+  protected async scrollFullPage(steps: number = 8, delay: number = 250): Promise<void> {
+    const totalHeight = document.documentElement.scrollHeight;
+    const stepHeight = totalHeight / steps;
+    
+    for (let i = 0; i < steps; i++) {
+      window.scrollTo({ top: i * stepHeight, behavior: 'smooth' });
+      await this.wait(delay);
+    }
+    
+    window.scrollTo({ top: totalHeight, behavior: 'smooth' });
+    await this.wait(delay * 2);
   }
 
   protected async waitForElements(selector: string, maxWaitMs: number = 8000): Promise<boolean> {
@@ -40,7 +66,7 @@ export abstract class BaseScraper {
     
     while (waited < maxWaitMs) {
       if (document.querySelectorAll(selector).length > 0) return true;
-      await this.sleep(interval);
+      await this.wait(interval);
       waited += interval;
     }
     return false;
@@ -49,14 +75,10 @@ export abstract class BaseScraper {
   protected parseCurrencyPrice(priceText: string | null): number | null {
     if (!priceText) return null;
     
-    let clean = priceText.replace(/S\/\s*/gi, '').replace(/,/g, '').trim();
+    const clean = priceText.replace(/S\/\s*/gi, '').replace(/,/g, '').trim();
     const num = parseFloat(clean);
     
-    if (isNaN(num) || num <= 0) {
-      return null;
-    }
-    
-    return Math.round(num);
+    return (!isNaN(num) && num > 0) ? Math.round(num) : null;
   }
 
   protected isDuplicate(products: Product[], product: Product): boolean {

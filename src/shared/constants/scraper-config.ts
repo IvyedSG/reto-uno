@@ -1,8 +1,4 @@
-import { Site, ScrapingMode, ScrapingLimits } from '../types/scraper.types';
-
-/**
- * Scraper Configuration Constants
- */
+import { Site, ScrapingMode, ScrapingLimits } from '@/shared/types/scraper.types';
 
 export const SCRAPING_MODES = {
   FAST: 'fast',
@@ -10,9 +6,6 @@ export const SCRAPING_MODES = {
   COMPLETE: 'complete'
 } as const;
 
-/**
- * Search URL generators for each supported site
- */
 export const SEARCH_URLS: Record<Site, (keyword: string, page?: number) => string> = {
   Falabella: (kw, page = 1) => {
     const base = `https://www.falabella.com.pe/falabella-pe/search?Ntt=${encodeURIComponent(kw)}`;
@@ -27,10 +20,6 @@ export const SEARCH_URLS: Record<Site, (keyword: string, page?: number) => strin
   }
 };
 
-/**
- * Scraping limits per mode and site.
- * Moved from shared/types/scraper.types.ts to keep config centralized.
- */
 export const SCRAPING_LIMITS: Record<ScrapingMode, ScrapingLimits> = {
   fast: { 
     falabella: 60, 
