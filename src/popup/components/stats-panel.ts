@@ -1,46 +1,19 @@
-/**
- * StatsPanel - Displays product statistics for a keyword
- */
-
 import { Keyword, Product } from '../../shared/types/product.types';
-import { ProductMatcher, ProductGroup } from '../../shared/utils/product-matcher';
-import { ICONS } from './Icons';
+import { ProductMatcher, ProductGroup, SiteStats } from '../../shared/utils/product-matcher';
+import { ICONS } from './icons';
 
-interface SiteStats {
-  count: number;
-  min: number;
-  max: number;
-  avg: number;
-}
-
-/**
- * Calculate statistics for products from a site
- */
-function calculateSiteStats(products: Product[]): SiteStats | null {
-  const prices = products.map(p => p.priceNumeric).filter((p): p is number => p !== null);
-  if (prices.length === 0) return null;
-  
-  return {
-    count: products.length,
-    min: Math.min(...prices),
-    max: Math.max(...prices),
-    avg: prices.reduce((a, b) => a + b, 0) / prices.length
-  };
-}
-
-/**
- * Render site stats card
- */
-function renderSiteStatsCard(siteName: string, stats: SiteStats | null, tagClass: string): string {
+function renderSiteStatsCard(siteName: string, stats: SiteStats | null): string {
   if (!stats) {
     return `<div class="stats-card text-center text-slate-400 text-xs py-4">Sin datos de ${siteName}</div>`;
   }
   
+  const logo = siteName === 'Falabella' ? ICONS.falabella : ICONS.meli;
+  
   return `
     <div class="stats-card">
       <div class="flex items-center gap-1 mb-2">
-        <span class="site-tag ${tagClass}">${siteName}</span>
-        <span class="text-[10px] text-slate-400">${stats.count} productos</span>
+        <span class="h-5 flex items-center">${logo}</span>
+        <span class="text-[10px] text-slate-400 ml-auto">${stats.count} productos</span>
       </div>
       <div class="space-y-1 text-xs">
         <p class="flex justify-between"><span class="text-slate-500">Mín:</span><span class="font-bold text-green-600">S/ ${stats.min.toFixed(2)}</span></p>
@@ -51,9 +24,6 @@ function renderSiteStatsCard(siteName: string, stats: SiteStats | null, tagClass
   `;
 }
 
-/**
- * Render top 3 best offers
- */
 function renderTopOffers(products: Product[]): string {
   const allPrices = products
     .filter(p => p.priceNumeric !== null)
@@ -77,7 +47,7 @@ function renderTopOffers(products: Product[]): string {
                 <p class="text-[11px] text-slate-700 truncate hover:text-blue-600" title="${item.title}">${item.title}</p>
                 <div class="flex items-center gap-2">
                   <span class="font-bold text-green-600 text-xs">S/ ${item.priceNumeric?.toFixed(2)}</span>
-                  <span class="site-tag ${item.site === 'Falabella' ? 'site-tag-falabella' : 'site-tag-meli'}">${item.site}</span>
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase">${item.site === 'Falabella' ? 'Falabella' : 'Meli'}</span>
                 </div>
               </div>
             </div>
@@ -88,9 +58,6 @@ function renderTopOffers(products: Product[]): string {
   `;
 }
 
-/**
- * Render similar product groups
- */
 function renderProductGroups(groups: ProductGroup[]): string {
   if (groups.length === 0) return '';
 
@@ -98,7 +65,7 @@ function renderProductGroups(groups: ProductGroup[]): string {
 
   return `
     <div class="border-t border-slate-100 pt-3">
-      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Productos Similares (${groups.length} grupos)</p>
+      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Similares (${groups.length} grupos)</p>
       ${groups.slice(0, 5).map((group, i) => {
         const { falabella, meli, savings, cheaperSite } = group.stats;
         const groupId = `group-${i}`;
@@ -108,7 +75,6 @@ function renderProductGroups(groups: ProductGroup[]): string {
         
         return `
         <div class="stats-card mb-3 ${savings && savings > 0 ? 'ring-1 ring-green-200' : ''}">
-          <!-- Header with expand toggle -->
           <div class="flex items-start justify-between cursor-pointer group-toggle" data-group="${groupId}">
             <p class="text-[11px] font-bold text-slate-700 truncate flex-1" title="${group.name}">
               ${i + 1}. ${group.name.substring(0, 35)}${group.name.length > 35 ? '...' : ''}
@@ -119,34 +85,34 @@ function renderProductGroups(groups: ProductGroup[]): string {
             </button>
           </div>
           
-          <!-- Summary stats -->
-          <div class="flex gap-3 text-xs text-slate-500 mt-1 mb-2">
-            <span class="flex items-center gap-1">
-              <span class="site-tag site-tag-falabella">F</span> ${falabella.count} · ${formatPrice(falabella.minPrice)}
+          <div class="flex gap-4 text-xs mt-1 mb-2">
+            <span class="flex items-center gap-1.5">
+              <span class="text-[9px] font-bold text-emerald-600/70">FALABELLA</span>
+              <span class="text-slate-400 font-medium">${falabella.count}<span class="text-[9px] ml-0.5 inline-block opacity-70">u.</span></span>
+              <span class="font-bold text-emerald-600">${formatPrice(falabella.min)}</span>
             </span>
-            <span class="flex items-center gap-1">
-              <span class="site-tag site-tag-meli">ML</span> ${meli.count} · ${formatPrice(meli.minPrice)}
+            <span class="flex items-center gap-1.5">
+              <span class="text-[9px] font-bold text-yellow-600/70">MELI</span>
+              <span class="text-slate-400 font-medium">${meli.count}<span class="text-[9px] ml-0.5 inline-block opacity-70">u.</span></span>
+              <span class="font-bold text-emerald-600">${formatPrice(meli.min)}</span>
             </span>
           </div>
           
-          <!-- Savings badge -->
           ${savings !== null && savings > 0 && cheaperSite ? `
-          <div class="flex items-center gap-1 text-xs bg-green-50 text-green-700 rounded px-2 py-1 mb-2">
-            <span class="text-green-600">${ICONS.savings}</span>
+          <div class="flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 rounded px-2 py-1 mb-2">
+            <span class="text-emerald-600">${ICONS.savings}</span>
             <span class="font-bold">AHORRO: S/ ${savings.toFixed(0)}</span>
-            <span class="text-green-600">en ${cheaperSite}</span>
+            <span class="text-emerald-600">en ${cheaperSite === 'Falabella' ? 'Falabella' : 'Meli'}</span>
           </div>
           ` : savings === 0 ? `
           <div class="text-xs text-slate-400 italic mb-2">Mismo precio</div>
           ` : ''}
           
-          <!-- Expandable products list (hidden by default) -->
           <div class="products-list hidden border-t border-slate-100 pt-2 mt-1" id="${groupId}">
             ${falabellaProds.length > 0 ? `
             <div class="mb-2">
-              <div class="flex items-center gap-1 text-xs font-medium text-slate-600 mb-1">
-                ${ICONS.package}
-                <span>Falabella (${falabellaProds.length})</span>
+              <div class="flex items-center gap-1 text-[10px] font-bold text-emerald-600 mb-1 uppercase tracking-tight">
+                <span>Falabella (${falabellaProds.length} productos)</span>
               </div>
               <div class="space-y-1 ml-4">
                 ${falabellaProds.map(p => `
@@ -162,9 +128,8 @@ function renderProductGroups(groups: ProductGroup[]): string {
             
             ${meliProds.length > 0 ? `
             <div>
-              <div class="flex items-center gap-1 text-xs font-medium text-slate-600 mb-1">
-                ${ICONS.package}
-                <span>MercadoLibre (${meliProds.length})</span>
+              <div class="flex items-center gap-1 text-[10px] font-bold text-yellow-600 mb-1 uppercase tracking-tight">
+                <span>MercadoLibre (${meliProds.length} productos)</span>
               </div>
               <div class="space-y-1 ml-4">
                 ${meliProds.map(p => `
@@ -185,9 +150,6 @@ function renderProductGroups(groups: ProductGroup[]): string {
   `;
 }
 
-/**
- * Render the complete stats panel content
- */
 export function renderStatsPanel(keyword: Keyword, products: Product[]): string {
   if (products.length === 0) {
     return `
@@ -201,10 +163,9 @@ export function renderStatsPanel(keyword: Keyword, products: Product[]): string 
   const falabellaProducts = products.filter(p => p.site === 'Falabella');
   const meliProducts = products.filter(p => p.site === 'MercadoLibre');
   
-  const falabellaStats = calculateSiteStats(falabellaProducts);
-  const meliStats = calculateSiteStats(meliProducts);
+  const falabellaStats = ProductMatcher.calculateSiteStats(falabellaProducts);
+  const meliStats = ProductMatcher.calculateSiteStats(meliProducts);
   
-  // Calculate potential savings
   let savings = 0;
   let savingsSite = '';
   if (falabellaStats && meliStats) {
@@ -236,13 +197,13 @@ export function renderStatsPanel(keyword: Keyword, products: Product[]): string 
           </div>
           <span class="savings-badge">S/ ${savings.toFixed(2)}</span>
         </div>
-        <p class="text-xs text-emerald-600 mt-1">Comprando en ${savingsSite} ahorras respecto al mínimo de la otra tienda</p>
+        <p class="text-xs text-emerald-600 mt-1">Ahorras en ${savingsSite} respecto al mínimo de la otra tienda</p>
       </div>
       ` : ''}
 
       <div class="grid grid-cols-2 gap-2">
-        ${renderSiteStatsCard('Falabella', falabellaStats, 'site-tag-falabella')}
-        ${renderSiteStatsCard('MercadoLibre', meliStats, 'site-tag-meli')}
+        ${renderSiteStatsCard('Falabella', falabellaStats)}
+        ${renderSiteStatsCard('MercadoLibre', meliStats)}
       </div>
 
       ${renderTopOffers(products)}
@@ -251,14 +212,10 @@ export function renderStatsPanel(keyword: Keyword, products: Product[]): string 
   `;
 }
 
-/**
- * Attach expand/collapse handlers for product groups
- */
 export function attachStatsPanelHandlers(): void {
   document.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
     
-    // Handle product links
     const link = target.closest('a.product-link');
     if (link) {
       e.preventDefault();
@@ -269,7 +226,6 @@ export function attachStatsPanelHandlers(): void {
       return;
     }
     
-    // Handle expand/collapse for product groups
     const expandBtn = target.closest('.expand-btn, .group-toggle');
     if (expandBtn) {
       const groupId = expandBtn.getAttribute('data-group');

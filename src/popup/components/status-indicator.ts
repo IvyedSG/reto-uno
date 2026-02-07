@@ -1,13 +1,6 @@
-/**
- * StatusIndicator - Status display utilities for keywords
- */
-
 import { KeywordStatus } from '../../shared/types/product.types';
-import { ICONS } from './Icons';
+import { ICONS } from './icons';
 
-/**
- * Get CSS class for keyword status
- */
 export function getStatusClass(status: KeywordStatus): string {
   const classes: Record<KeywordStatus, string> = {
     [KeywordStatus.RUNNING]: 'status-running',
@@ -19,9 +12,6 @@ export function getStatusClass(status: KeywordStatus): string {
   return classes[status] || 'status-idle';
 }
 
-/**
- * Get icon for keyword status
- */
 export function getStatusIcon(status: KeywordStatus): string {
   const icons: Record<KeywordStatus, string> = {
     [KeywordStatus.RUNNING]: ICONS.spinner,
@@ -33,9 +23,6 @@ export function getStatusIcon(status: KeywordStatus): string {
   return icons[status] || ICONS.pause;
 }
 
-/**
- * Get display text for keyword status
- */
 export function getStatusText(status: KeywordStatus): string {
   const texts: Record<KeywordStatus, string> = {
     [KeywordStatus.RUNNING]: 'Ejecutando...',
@@ -47,9 +34,6 @@ export function getStatusText(status: KeywordStatus): string {
   return texts[status] || 'Idle';
 }
 
-/**
- * Render full status badge
- */
 export function renderStatusBadge(status: KeywordStatus): string {
   return `<span class="status-badge ${getStatusClass(status)}">${getStatusIcon(status)} ${getStatusText(status)}</span>`;
 }

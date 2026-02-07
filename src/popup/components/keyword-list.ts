@@ -1,11 +1,7 @@
-/**
- * KeywordList - Renders keyword cards with action buttons
- */
-
 import { Keyword, KeywordStatus } from '../../shared/types/product.types';
 import { Site } from '../../shared/types/scraper.types';
-import { ICONS } from './Icons';
-import { getStatusClass, getStatusIcon, getStatusText } from './StatusIndicator';
+import { ICONS } from './icons';
+import { getStatusClass, getStatusIcon, getStatusText } from './status-indicator';
 
 export interface KeywordListHandlers {
   onSearchSite: (keywordId: string, site: Site) => void;
@@ -14,9 +10,6 @@ export interface KeywordListHandlers {
   onDelete: (keywordId: string) => void;
 }
 
-/**
- * Render empty state when no keywords
- */
 function renderEmptyState(): string {
   return `
     <div class="flex flex-col items-center justify-center py-8 opacity-40">
@@ -25,9 +18,6 @@ function renderEmptyState(): string {
   `;
 }
 
-/**
- * Render a single keyword card
- */
 function renderKeywordCard(k: Keyword): string {
   const falabellaDone = k.falabellaDone === true;
   const mercadoLibreDone = k.mercadoLibreDone === true;
@@ -57,20 +47,18 @@ function renderKeywordCard(k: Keyword): string {
             <span>Cancelar</span>
           </button>
         ` : bothDone ? `
-          <div class="flex-1 text-center text-xs text-emerald-600 bg-emerald-50 py-2 rounded-lg flex items-center justify-center gap-2">
+          <div class="flex-1 text-center text-xs text-sky-600 bg-sky-50 py-2 rounded-lg flex items-center justify-center gap-2">
             ${ICONS.check}
             <span class="font-medium">Extracción completa</span>
           </div>
         ` : `
-          <button class="btn-site btn-falabella search-site-btn flex-1 ${falabellaDone ? 'btn-site-done' : ''}" 
+          <button class="btn-site btn-falabella search-site-btn flex-1 group ${falabellaDone ? 'btn-site-done' : ''}" 
                   data-id="${k.id}" data-site="Falabella" ${falabellaDone ? 'disabled' : ''}>
-            ${falabellaDone ? ICONS.check : ICONS.search}
-            <span>Falabella</span>
+            ${falabellaDone ? `<span class="flex items-center gap-1 text-sky-600 font-bold text-[9px]">${ICONS.check} LISTO</span>` : ICONS.falabella}
           </button>
-          <button class="btn-site btn-meli search-site-btn flex-1 ${mercadoLibreDone ? 'btn-site-done' : ''}" 
+          <button class="btn-site btn-meli search-site-btn flex-1 group ${mercadoLibreDone ? 'btn-site-done' : ''}" 
                   data-id="${k.id}" data-site="MercadoLibre" ${mercadoLibreDone ? 'disabled' : ''}>
-            ${mercadoLibreDone ? ICONS.check : ICONS.search}
-            <span>MercadoLibre</span>
+            ${mercadoLibreDone ? `<span class="flex items-center gap-1 text-sky-600 font-bold text-[9px]">${ICONS.check} LISTO</span>` : ICONS.meli}
           </button>
         `}
       </div>
@@ -78,10 +66,11 @@ function renderKeywordCard(k: Keyword): string {
       <div class="flex items-center gap-3 text-[10px]">
         <span class="status-badge ${getStatusClass(k.status)}">${getStatusIcon(k.status)} ${getStatusText(k.status)}</span>
         <span class="text-slate-400">Productos: ${k.productCount}</span>
-        ${falabellaDone || mercadoLibreDone ? `
-          <span class="text-emerald-500 flex items-center gap-1">
-            ${falabellaDone ? '<span class="bg-emerald-100 px-1 rounded text-[9px]">F✓</span>' : ''}
-            ${mercadoLibreDone ? '<span class="bg-emerald-100 px-1 rounded text-[9px]">ML✓</span>' : ''}
+        <span class="text-slate-400">Productos: ${k.productCount}</span>
+        ${(falabellaDone || mercadoLibreDone) && !bothDone ? `
+          <span class="text-sky-500 flex items-center gap-1">
+            ${falabellaDone ? `<span class="bg-sky-100 p-0.5 rounded">${ICONS.falabella}</span>` : ''}
+            ${mercadoLibreDone ? `<span class="bg-sky-100 p-0.5 rounded">${ICONS.meli}</span>` : ''}
           </span>
         ` : ''}
       </div>
@@ -89,9 +78,6 @@ function renderKeywordCard(k: Keyword): string {
   `;
 }
 
-/**
- * Render keyword list and attach event handlers
- */
 export function renderKeywordList(
   container: HTMLElement,
   keywords: Keyword[],
@@ -104,7 +90,6 @@ export function renderKeywordList(
 
   container.innerHTML = keywords.map(renderKeywordCard).join('');
 
-  // Attach event listeners
   container.querySelectorAll('.search-site-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = (btn as HTMLElement).dataset.id;

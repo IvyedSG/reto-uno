@@ -1,7 +1,3 @@
-/**
- * Product-related types and enums
- */
-
 export enum KeywordStatus {
   IDLE = 'Idle',
   RUNNING = 'Running',
@@ -21,15 +17,11 @@ export interface Keyword {
 }
 
 export interface Product {
-  site: 'Falabella' | 'MercadoLibre';
-  keyword: string;
-  keywordId: string;
-  timestamp: number;
-  position: number;
+  id: string;
   title: string;
-  priceVisible: string;
   priceNumeric: number | null;
+  imageUrl: string;
   url: string;
-  brand: string | null;
-  seller: string | null;
+  site: 'Falabella' | 'MercadoLibre';
+  scrapedAt: number;
 }

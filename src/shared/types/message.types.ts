@@ -4,6 +4,7 @@
 
 import type { Product } from './product.types';
 import type { Site, ScrapingMode } from './scraper.types';
+export type { Site, ScrapingMode };
 
 export type Action = 
   | 'START_SCRAPING' 

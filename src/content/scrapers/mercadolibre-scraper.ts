@@ -1,78 +1,60 @@
-/**
- * MercadoLibre Scraper - Product extraction from MercadoLibre Peru
- * 
- * Handles single-page scraping. Pagination is managed by the
- * background service worker which opens multiple tabs.
- */
-
 import { BaseScraper } from './base-scraper';
 import { Product } from '../../shared/types/product.types';
 
 export class MercadoLibreScraper extends BaseScraper {
-  private readonly SELECTORS = {
-    cards: 'li.ui-search-layout__item',
-    titleLink: 'a.poly-component__title',
-    priceFraction: '.andes-money-amount__fraction'
-  };
-
   constructor(keyword: string, keywordId: string, maxProducts: number = 100) {
-    super('MercadoLibre', keyword, keywordId, maxProducts);
+    super(keyword, keywordId, maxProducts, 'MercadoLibre');
+  }
+
+  protected getProductSelector(): string {
+    return 'li.ui-search-layout__item';
   }
 
   async scrape(): Promise<Product[]> {
-    console.log(`[MercadoLibre] Started scraping: ${this.keyword}`);
-    const results: Product[] = [];
+    const products: Product[] = [];
     
     try {
-      await this.waitForElements(this.SELECTORS.cards, 5000);
-      await this.scrollFullPage(5, 100);
+      await this.waitForElements(this.getProductSelector(), 5000);
+      await this.autoScroll(5);
       
-      const cards = document.querySelectorAll(this.SELECTORS.cards);
-      console.log(`[MercadoLibre] Found ${cards.length} cards`);
+      const productContainers = document.querySelectorAll(this.getProductSelector());
       
-      for (const card of cards) {
-        if (results.length >= this.maxProducts) break;
+      for (const container of productContainers) {
+        if (products.length >= this.maxProducts) break;
         
-        const product = this.extractProduct(card as HTMLElement);
-        if (product && !this.isDuplicate(results, product)) {
-          product.position = results.length + 1;
-          results.push(product);
+        const titleEl = container.querySelector('.ui-search-item__title');
+        const priceEl = container.querySelector('.ui-search-price__second-line .andes-money-amount__fraction');
+        const linkEl = container.querySelector('a.ui-search-link');
+        const imgEl = container.querySelector('.ui-search-result-image__element');
+
+        if (titleEl && priceEl && linkEl) {
+          const title = titleEl.textContent?.trim() || '';
+          const priceText = priceEl.textContent?.trim() || '';
+          const price = this.parseCurrencyPrice(priceText);
+          const url = (linkEl as HTMLAnchorElement).href;
+          const imageUrl = (imgEl as HTMLImageElement)?.src || '';
+
+          if (price !== null) {
+            const product: Product = {
+              id: crypto.randomUUID(),
+              title,
+              priceNumeric: price,
+              imageUrl,
+              url,
+              site: 'MercadoLibre',
+              scrapedAt: Date.now()
+            };
+
+            if (!this.isDuplicate(products, product)) {
+              products.push(product);
+            }
+          }
         }
       }
     } catch (error) {
       console.error('[MercadoLibre] Error:', error);
     }
     
-    console.log(`[MercadoLibre] Extraction complete: ${results.length} products`);
-    return results;
-  }
-
-  private extractProduct(card: HTMLElement): Product | null {
-    const titleLink = card.querySelector(this.SELECTORS.titleLink) as HTMLAnchorElement;
-    if (!titleLink || !titleLink.href) return null;
-    
-    const title = titleLink.textContent?.trim() || '';
-    const url = titleLink.href;
-    
-    const priceEl = card.querySelector(this.SELECTORS.priceFraction);
-    const priceRaw = priceEl?.textContent?.trim() || '';
-    const priceNumeric = this.parseCurrencyPrice(priceRaw);
-    
-    if (priceNumeric === null) return null;
-    const priceVisible = `S/ ${priceNumeric.toLocaleString('es-PE')}`;
-    
-    return {
-      site: 'MercadoLibre',
-      keyword: this.keyword,
-      keywordId: this.keywordId,
-      timestamp: Date.now(),
-      position: 0,
-      title,
-      priceVisible,
-      priceNumeric,
-      url,
-      brand: null,
-      seller: null
-    };
+    return products;
   }
 }

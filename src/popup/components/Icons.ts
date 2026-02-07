@@ -1,8 +1,8 @@
-/**
- * Icons - SVG icon definitions for popup UI
- */
-
 export const ICONS = {
+  // Logos de tiendas (usan las imágenes en public/assets)
+  falabella: `<img src="../assets/falabella.png" class="h-6 w-auto object-contain max-h-full logo-img" alt="Falabella">`,
+  meli: `<img src="../assets/meli.png" class="h-6 w-auto object-contain max-h-full logo-img" alt="MercadoLibre">`,
+  
   search: `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
   </svg>`,
