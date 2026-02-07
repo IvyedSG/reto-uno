@@ -74,7 +74,7 @@ Cada producto se extrae y almacena con la siguiente estructura:
 
 ---
 
-## Criterio de Similitud (Matching Algorithm)
+## Criterio de Similitud
 
 La extensión utiliza un motor de coincidencia inteligente (`ProductMatcher`) para agrupar productos similares. El criterio se basa en:
 
