@@ -17,6 +17,14 @@ Este proyecto es una herramienta avanzada de comparación que permite a los usua
 
 ---
 
+## Evidencia Visual
+
+![Búsqueda en Falabella](public/assets/cap1.png)
+![Búsqueda en MercadoLibre](public/assets/cap2.png)
+![Comparación de Precios](public/assets/cap3.png)
+
+---
+
 ## Instalación y Configuración
 
 Este proyecto utiliza [Bun](https://bun.sh/) para una máxima velocidad de desarrollo y construcción.
