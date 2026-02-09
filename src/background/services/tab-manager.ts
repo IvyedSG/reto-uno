@@ -48,8 +48,6 @@ export class TabManager {
     const port = this.ports.get(tabId);
     if (port) {
       port.postMessage(message);
-    } else {
-      chrome.tabs.sendMessage(tabId, message);
     }
   }
 

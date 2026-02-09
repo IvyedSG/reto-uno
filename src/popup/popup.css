@@ -128,12 +128,8 @@
     @apply text-xs font-medium bg-slate-100 border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 cursor-pointer transition-all hover:border-slate-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none;
   }
 
-  .btn-site-done {
-    @apply opacity-60 cursor-not-allowed bg-sky-50 border-sky-200 text-sky-600;
-  }
-  
-  .btn-site-done:hover {
-    @apply bg-sky-50 border-sky-200;
+  .btn-results {
+    @apply flex-1 text-center text-xs text-white bg-indigo-500 py-2 rounded-xl flex items-center justify-center gap-2 transition-all hover:bg-indigo-600 active:scale-95 shadow-sm shadow-indigo-100 font-bold cursor-pointer border-none;
   }
 
   @keyframes spin {

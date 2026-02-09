@@ -25,11 +25,11 @@ export function getStatusIcon(status: KeywordStatus): string {
 
 export function getStatusText(status: KeywordStatus): string {
   const texts: Record<KeywordStatus, string> = {
-    [KeywordStatus.RUNNING]: 'Ejecutando...',
-    [KeywordStatus.DONE]: 'Completado',
+    [KeywordStatus.RUNNING]: 'Buscando...',
+    [KeywordStatus.DONE]: 'Listo',
     [KeywordStatus.ERROR]: 'Error',
     [KeywordStatus.CANCELLED]: 'Cancelado',
-    [KeywordStatus.IDLE]: 'Idle'
+    [KeywordStatus.IDLE]: 'En espera'
   };
   return texts[status] || 'Idle';
 }

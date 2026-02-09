@@ -151,7 +151,7 @@ export class ScrapingOrchestrator {
 
       const port = await TabManager.connect(tabId);
       port.onMessage.addListener(async (msg: ScrapingUpdate) => {
-        if (msg.action === 'SCRAPING_DONE') {
+        if (msg.action === 'SCRAPING_DONE' || msg.action === 'SCRAPING_ERROR') {
           if (tabId) await TabManager.closeTab(tabId);
         }
         this.handleScrapingUpdate(msg);
@@ -167,7 +167,6 @@ export class ScrapingOrchestrator {
     } catch (error) {
       console.error(`[Orquestador] Error en página ${page}:`, error);
       if (tabId) await TabManager.closeTab(tabId);
-      // Marcar una página como completada aunque falle para no bloquear el final
       await this.handlePageDone(state.keywordId, state.site, []);
     }
   }
@@ -177,11 +176,6 @@ export class ScrapingOrchestrator {
     if (!state || !state.isActive) return;
 
     state.isActive = false;
-
-    // TODO: Cerrar todas las pestañas asociadas a este proceso si fuera necesario.
-    // Actualmente el TabManager solo cierra la pestaña cuando se le indica.
-    // Podríamos mejorar el TabManager para rastrear pestañas por keyword.
-
     const final = state.totalProductsAcrossPages.slice(0, state.maxProducts);
     if (final.length > 0) {
       await StorageManager.saveProducts(state.keywordId, final);

@@ -17,7 +17,6 @@ export interface GroupStats {
   cheaperSite: 'Falabella' | 'MercadoLibre' | null;
   meliCount: number;
   falabellaCount: number;
-  priceDiff: number | null;
 }
 
 export interface ProductGroup {
@@ -150,11 +149,6 @@ export class ProductMatcher {
         }
       }
 
-      let priceDiff: number | null = null;
-      if (meliStats.min > 0 && falabellaStats.min > 0) {
-        priceDiff = meliStats.min - falabellaStats.min;
-      }
-
       group.stats = {
         min: allPrices.length > 0 ? Math.min(...allPrices) : 0,
         max: allPrices.length > 0 ? Math.max(...allPrices) : 0,
@@ -164,8 +158,7 @@ export class ProductMatcher {
         savings,
         cheaperSite,
         meliCount: meliProducts.length,
-        falabellaCount: falabellaProducts.length,
-        priceDiff
+        falabellaCount: falabellaProducts.length
       };
       
       return group;
@@ -182,8 +175,7 @@ export class ProductMatcher {
       savings: null,
       cheaperSite: null,
       meliCount: 0,
-      falabellaCount: 0,
-      priceDiff: null
+      falabellaCount: 0
     };
   }
 

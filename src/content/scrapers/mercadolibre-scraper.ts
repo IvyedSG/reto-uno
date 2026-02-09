@@ -11,6 +11,20 @@ export class MercadoLibreScraper extends BaseScraper {
     const results: Product[] = [];
     
     try {
+      // Sincronización inicial con detección de "Sin resultados"
+      console.log('[MercadoLibre] Esperando resultados o indicador de "Sin resultados"...');
+      
+      const found = await this.waitForElements(
+        '.ui-search-results, .ui-search-main, .ui-search-item__group', 
+        5000,
+        '.ui-search-rescue__title, .ui-search-error__title'
+      );
+
+      if (!found) {
+        console.warn('[MercadoLibre] No se encontraron resultados o se detectó una página vacía.');
+        return [];
+      }
+
       const candidates: string[] = [];
       const nordicScript = document.getElementById('__NORDIC_RENDERING_CTX__');
       if (nordicScript) {
@@ -54,6 +68,10 @@ export class MercadoLibreScraper extends BaseScraper {
         }
       }
 
+      if (!data) {
+        console.warn('[MercadoLibre] No se encontró el script de datos en la página.');
+      }
+
       if (data) {
         let items = data.appProps?.pageProps?.initialState?.results;
 
@@ -78,25 +96,26 @@ export class MercadoLibreScraper extends BaseScraper {
           console.log(`[MercadoLibre] Procesando ${items.length} items potenciales`);
 
           items.forEach((item: any, i: number) => {
-            if (results.length >= this.maxProducts) return;
+            if (!item || results.length >= this.maxProducts) return;
             
-            const polyData = item.polycard || item;
+            const polyData = item.polycard || item || {};
             const components = polyData.components || item.components || [];
             const metadata = polyData.metadata || item.metadata || {};
             
-            const titleComp = components.find((c: any) => c.id === 'title' || c.type === 'title');
-            const priceComp = components.find((c: any) => c.id === 'price' || c.type === 'price');
-            const sellerComp = components.find((c: any) => c.id === 'seller' || c.type === 'seller');
+            const titleComp = components.find((c: any) => c && (c.id === 'title' || c.type === 'title'));
+            const priceComp = components.find((c: any) => c && (c.id === 'price' || c.type === 'price'));
+            const sellerComp = components.find((c: any) => c && (c.id === 'seller' || c.type === 'seller'));
             
             const title = titleComp?.title?.text || metadata.title || item.title || '';
             const priceValue = priceComp?.price?.current_price?.value || 0;
             const url = metadata.url || item.permalink || '';
             
             let imageUrl = item.thumbnail || '';
-            if (item.pictures?.pictures?.[0]?.url) {
-              imageUrl = item.pictures.pictures[0].url;
-            } else if (item.pictures?.pictures?.[0]?.id) {
-              imageUrl = `https://http2.mlstatic.com/D_NQ_NP_${item.pictures.pictures[0].id}-W.webp`;
+            const picInfo = item.pictures?.pictures?.[0];
+            if (picInfo?.url) {
+              imageUrl = picInfo.url;
+            } else if (picInfo?.id) {
+              imageUrl = `https://http2.mlstatic.com/D_NQ_NP_${picInfo.id}-W.webp`;
             }
 
             if (title && priceValue > 0) {

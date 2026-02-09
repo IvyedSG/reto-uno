@@ -60,12 +60,16 @@ export abstract class BaseScraper {
     await this.wait(50);
   }
 
-  protected async waitForElements(selector: string, maxWaitMs: number = 8000): Promise<boolean> {
+  protected async waitForElements(selector: string, maxWaitMs: number = 8000, negativeSelector?: string): Promise<boolean> {
     const interval = 200;
     let waited = 0;
     
     while (waited < maxWaitMs) {
       if (document.querySelectorAll(selector).length > 0) return true;
+      if (negativeSelector && document.querySelectorAll(negativeSelector).length > 0) {
+        console.warn(`[BaseScraper] Detención temprana: se encontró selector negativo "${negativeSelector}"`);
+        return false;
+      }
       await this.wait(interval);
       waited += interval;
     }

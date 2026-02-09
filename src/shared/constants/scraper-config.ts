@@ -1,10 +1,5 @@
 import { Site, ScrapingMode, ScrapingLimits } from '@/shared/types/scraper.types';
 
-export const SCRAPING_MODES = {
-  FAST: 'fast',
-  NORMAL: 'normal',
-  COMPLETE: 'complete'
-} as const;
 
 export const SEARCH_URLS: Record<Site, (keyword: string, page?: number) => string> = {
   Falabella: (kw, page = 1) => {
@@ -42,6 +37,5 @@ export const TIMEOUTS = {
   SCROLL_DELAY: 50,
   PAGE_LOAD: 4000,
   NAVIGATION: 2000,
-  BETWEEN_PAGES: 0,
   SCRIPT_INJECTION: 50
 } as const;

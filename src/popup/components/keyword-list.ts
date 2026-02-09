@@ -13,7 +13,7 @@ export interface KeywordListHandlers {
 function renderEmptyState(): string {
   return `
     <div class="flex flex-col items-center justify-center py-8 opacity-40">
-      <p class="text-xs font-medium text-center text-slate-800">No hay keywords. Agrega una para comenzar.</p>
+      <p class="text-xs font-medium text-center text-slate-800">¡Hola! Agrega un producto para encontrar el mejor precio.</p>
     </div>
   `;
 }
@@ -31,10 +31,7 @@ function renderKeywordCard(k: Keyword): string {
           ${k.text}
         </span>
         <div class="flex items-center gap-1">
-          <button class="btn-icon-stats stats-btn" data-id="${k.id}" title="Ver estadísticas">
-            ${ICONS.stats}
-          </button>
-          <button class="btn-icon-delete delete-btn" data-id="${k.id}" title="Eliminar keyword">
+          <button class="btn-icon-delete delete-btn" data-id="${k.id}" title="Eliminar producto">
             ${ICONS.delete}
           </button>
         </div>
@@ -47,10 +44,10 @@ function renderKeywordCard(k: Keyword): string {
             <span>Cancelar</span>
           </button>
         ` : bothDone ? `
-          <div class="flex-1 text-center text-xs text-sky-600 bg-sky-50 py-2 rounded-lg flex items-center justify-center gap-2">
-            ${ICONS.check}
-            <span class="font-medium">Extracción completa</span>
-          </div>
+          <button class="btn-results stats-btn flex-1" data-id="${k.id}" title="Ver resultados de la comparación">
+            ${ICONS.stats}
+            <span>Ver mejores precios</span>
+          </button>
         ` : `
           <button class="btn-site btn-falabella search-site-btn flex-1 group ${falabellaDone ? 'btn-site-done' : ''}" 
                   data-id="${k.id}" data-site="Falabella" ${falabellaDone ? 'disabled' : ''}>
