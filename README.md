@@ -59,7 +59,7 @@ bun run build
 
 ## Arquitectura Técnica
 
-Para una especificación profunda de la ingeniería de datos detrás del proyecto, consulta la [Guía Técnica de Scraping](DOCS_SCRAPING.md).
+Para una especificación profunda de la ingeniería de datos detrás del proyecto, consulta la [Guía Técnica de Scraping](docs/DOCS-SCRAPING.md).
 
 ### 1. Extracción de Híper-Velocidad (JSON-First)
 
