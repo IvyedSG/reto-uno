@@ -2,11 +2,9 @@ import { TIMEOUTS } from '@/shared/constants/scraper-config';
 
 export class TabManager {
   private static ports: Map<number, chrome.runtime.Port> = new Map();
-  private static activeTabId: number | null = null;
 
   static async createTab(url: string, active: boolean = false): Promise<number> {
     const tab = await chrome.tabs.create({ url, active });
-    this.activeTabId = tab.id!;
     return tab.id!;
   }
 
@@ -62,19 +60,8 @@ export class TabManager {
         port.disconnect();
         this.ports.delete(tabId);
       }
-      
-      if (this.activeTabId === tabId) {
-        this.activeTabId = null;
-      }
       await chrome.tabs.remove(tabId);
     } catch (e) {
-      // Ignorar si la pestaña ya está cerrada
-    }
-  }
-
-  static async closeActiveTab(): Promise<void> {
-    if (this.activeTabId !== null) {
-      await this.closeTab(this.activeTabId);
     }
   }
 }

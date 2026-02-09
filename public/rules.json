@@ -1,0 +1,21 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*",
+      "resourceTypes": ["image", "font", "media", "stylesheet"],
+      "domains": ["falabella.com.pe", "mercadolibre.com.pe"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "google-analytics.com",
+      "resourceTypes": ["script"]
+    }
+  }
+]

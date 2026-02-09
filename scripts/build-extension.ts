@@ -14,10 +14,19 @@ const alias = {
 async function buildExtension() {
   console.log('🚀 Iniciando post-procesamiento de la extensión...');
 
-  const manifestSrc = resolve(rootDir, 'manifest.json');
+  const manifestSrc = resolve(rootDir, 'public/manifest.json');
   const manifestDist = resolve(rootDir, 'dist/manifest.json');
-  fs.copyFileSync(manifestSrc, manifestDist);
-  console.log('✅ manifest.json copiado.');
+  if (fs.existsSync(manifestSrc)) {
+    fs.copyFileSync(manifestSrc, manifestDist);
+    console.log('✅ manifest.json copiado.');
+  }
+
+  const rulesSrc = resolve(rootDir, 'public/rules.json');
+  const rulesDist = resolve(rootDir, 'dist/rules.json');
+  if (fs.existsSync(rulesSrc)) {
+    fs.copyFileSync(rulesSrc, rulesDist);
+    console.log('✅ rules.json copiado.');
+  }
 
   const srcPopup = resolve(rootDir, 'dist/src/popup');
   const dstPopup = resolve(rootDir, 'dist/popup');

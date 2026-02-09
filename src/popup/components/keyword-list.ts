@@ -65,7 +65,7 @@ function renderKeywordCard(k: Keyword): string {
       
       <div class="flex items-center gap-3 text-[10px]">
         <span class="status-badge ${getStatusClass(k.status)}">${getStatusIcon(k.status)} ${getStatusText(k.status)}</span>
-        <span class="text-slate-400">Productos: ${k.productCount}</span>
+        <span class="text-slate-400">Productos: <span data-product-count="${k.id}">${k.productCount}</span></span>
         ${(falabellaDone || mercadoLibreDone) && !bothDone ? `
           <span class="text-sky-500 flex items-center gap-1">
             ${falabellaDone ? `<span class="bg-sky-100 p-0.5 rounded">${ICONS.falabella}</span>` : ''}

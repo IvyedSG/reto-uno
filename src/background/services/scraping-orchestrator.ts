@@ -1,7 +1,7 @@
 import { Action, ScrapingUpdate } from '@/shared/types/message.types';
 import { Product, KeywordStatus } from '@/shared/types/product.types';
 import { Site } from '@/shared/types/scraper.types';
-import { SEARCH_URLS, TIMEOUTS } from '@/shared/constants/scraper-config';
+import { SEARCH_URLS } from '@/shared/constants/scraper-config';
 import { StorageManager } from '@/shared/utils/storage-manager';
 import { PortManager } from '@/shared/messaging/port-manager';
 import { TabManager } from '@/background/services/tab-manager';
@@ -10,11 +10,12 @@ interface ScrapingState {
   keywordId: string;
   keywordText: string;
   site: Site;
-  currentPage: number;
   maxPages: number;
   maxProducts: number;
-  allProducts: Product[];
   isActive: boolean;
+  initialProductCount: number;
+  completedPages: number;
+  totalProductsAcrossPages: Product[];
 }
 
 /**
@@ -22,6 +23,7 @@ interface ScrapingState {
  */
 export class ScrapingOrchestrator {
   private states: Map<string, ScrapingState> = new Map();
+  private lastStorageUpdate: Map<string, number> = new Map();
 
   constructor(private messenger: PortManager) {}
 
@@ -43,15 +45,23 @@ export class ScrapingOrchestrator {
       keywordId,
       keywordText,
       site,
-      currentPage: 1,
       maxPages: maxPages || 1,
       maxProducts: maxProducts || 100,
-      allProducts: [],
-      isActive: true
+      isActive: true,
+      initialProductCount: 0,
+      completedPages: 0,
+      totalProductsAcrossPages: []
     });
 
+    const products = await StorageManager.getProducts(keywordId);
+    const existingCount = products.filter(p => p.site !== site).length;
+    const currentState = this.states.get(stateKey);
+    if (currentState) currentState.initialProductCount = existingCount;
+
     await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.RUNNING);
-    await this.scrapeCurrentPage(stateKey);
+    
+    const pagesToScrape = Array.from({ length: (maxPages || 1) }, (_, i) => i + 1);
+    await Promise.all(pagesToScrape.map(page => this.scrapePage(stateKey, page)));
   }
 
   /**
@@ -65,7 +75,6 @@ export class ScrapingOrchestrator {
       this.states.delete(stateKey);
     }
     await StorageManager.updateKeywordStatus(keywordId, KeywordStatus.CANCELLED);
-    await TabManager.closeActiveTab();
   }
 
   /**
@@ -82,6 +91,28 @@ export class ScrapingOrchestrator {
     }
 
     if (action === 'SCRAPING_PROGRESS') {
+      const stateKey = this.getStateKey(keywordId, site);
+      const state = this.states.get(stateKey);
+      
+      if (state && state.isActive && products) {
+        const currentCount = state.initialProductCount + state.totalProductsAcrossPages.length + products.length;
+        
+        const now = Date.now();
+        const lastUpdate = this.lastStorageUpdate.get(stateKey) || 0;
+        const shouldUpdateStorage = (now - lastUpdate > 1000);
+
+        if (shouldUpdateStorage) {
+          await StorageManager.updateProductCount(keywordId, currentCount);
+          this.lastStorageUpdate.set(stateKey, now);
+        }
+
+        this.messenger.postMessage('SCRAPING_PROGRESS' as Action, {
+          ...update,
+          progress: currentCount
+        });
+        return;
+      }
+
       this.messenger.postMessage('SCRAPING_PROGRESS' as Action, update);
       return;
     }
@@ -94,50 +125,35 @@ export class ScrapingOrchestrator {
   private async handlePageDone(keywordId: string, site: Site, products: Product[]): Promise<void> {
     const stateKey = this.getStateKey(keywordId, site);
     const state = this.states.get(stateKey);
-
-    await TabManager.closeActiveTab();
-
     if (!state || !state.isActive) return;
 
-    state.allProducts.push(...products);
-    console.log(`[Orquestador] ${site}: ${state.allProducts.length} productos acumulados`);
+    state.totalProductsAcrossPages.push(...products);
+    state.completedPages++;
 
-    const reachedLimit = state.allProducts.length >= state.maxProducts;
-    const noMoreResults = products.length === 0;
-    const lastPageReached = state.currentPage >= state.maxPages;
-
-    if (reachedLimit || noMoreResults || lastPageReached) {
+    if (state.completedPages >= state.maxPages || state.totalProductsAcrossPages.length >= state.maxProducts) {
       await this.finalizeScraping(stateKey);
-    } else {
-      await this.continueToNextPage(stateKey);
     }
   }
 
-  private async continueToNextPage(stateKey: string): Promise<void> {
+  private async scrapePage(stateKey: string, page: number): Promise<void> {
     const state = this.states.get(stateKey);
     if (!state || !state.isActive) return;
 
-    state.currentPage++;
-    await this.scrapeCurrentPage(stateKey);
-  }
-
-  private async scrapeCurrentPage(stateKey: string): Promise<void> {
-    const state = this.states.get(stateKey);
-    if (!state || !state.isActive) return;
-
-    const url = SEARCH_URLS[state.site](state.keywordText, state.currentPage);
+    const url = SEARCH_URLS[state.site](state.keywordText, page);
     
+    let tabId: number | undefined;
     try {
-      const tabId = await TabManager.createTab(url, false);
+      tabId = await TabManager.createTab(url, false);
       await TabManager.waitForLoad(tabId);
       
-      await new Promise(resolve => setTimeout(resolve, TIMEOUTS.BETWEEN_PAGES));
-
       const scriptFile = state.site === 'Falabella' ? 'content/falabella.js' : 'content/meli.js';
       await TabManager.injectScript(tabId, scriptFile);
 
       const port = await TabManager.connect(tabId);
-      port.onMessage.addListener((msg: ScrapingUpdate) => {
+      port.onMessage.addListener(async (msg: ScrapingUpdate) => {
+        if (msg.action === 'SCRAPING_DONE') {
+          if (tabId) await TabManager.closeTab(tabId);
+        }
         this.handleScrapingUpdate(msg);
       });
 
@@ -149,18 +165,24 @@ export class ScrapingOrchestrator {
         maxProducts: state.maxProducts
       });
     } catch (error) {
-      console.error(`[Orquestador] Error en navegación:`, error);
-      await this.finalizeScraping(stateKey);
+      console.error(`[Orquestador] Error en página ${page}:`, error);
+      if (tabId) await TabManager.closeTab(tabId);
+      // Marcar una página como completada aunque falle para no bloquear el final
+      await this.handlePageDone(state.keywordId, state.site, []);
     }
   }
 
   private async finalizeScraping(stateKey: string): Promise<void> {
     const state = this.states.get(stateKey);
-    if (!state) return;
+    if (!state || !state.isActive) return;
 
     state.isActive = false;
 
-    const final = state.allProducts.slice(0, state.maxProducts);
+    // TODO: Cerrar todas las pestañas asociadas a este proceso si fuera necesario.
+    // Actualmente el TabManager solo cierra la pestaña cuando se le indica.
+    // Podríamos mejorar el TabManager para rastrear pestañas por keyword.
+
+    const final = state.totalProductsAcrossPages.slice(0, state.maxProducts);
     if (final.length > 0) {
       await StorageManager.saveProducts(state.keywordId, final);
     }

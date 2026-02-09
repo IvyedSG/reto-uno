@@ -47,7 +47,7 @@ function renderTopOffers(products: Product[]): string {
                 <p class="text-[11px] text-slate-700 truncate hover:text-blue-600" title="${item.title}">${item.title}</p>
                 <div class="flex items-center gap-2">
                   <span class="font-bold text-green-600 text-xs">S/ ${item.priceNumeric?.toFixed(2)}</span>
-                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${item.site === 'Falabella' ? 'site-tag-falabella' : 'site-tag-meli'}">${item.site === 'Falabella' ? 'Falabella' : 'Meli'}</span>
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${item.site === 'Falabella' ? 'site-tag-falabella' : 'site-tag-meli'}">${item.site === 'Falabella' ? 'Falabella' : 'Mercado Libre'}</span>
                 </div>
               </div>
             </div>
@@ -102,7 +102,7 @@ function renderProductGroups(groups: ProductGroup[]): string {
           <div class="flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 rounded px-2 py-1 mb-2">
             <span class="text-emerald-600">${ICONS.savings}</span>
             <span class="font-bold">AHORRO: S/ ${savings.toFixed(0)}</span>
-            <span class="text-emerald-600">en ${cheaperSite === 'Falabella' ? 'Falabella' : 'Meli'}</span>
+            <span class="text-emerald-600">en ${cheaperSite === 'Falabella' ? 'Falabella' : 'Mercado Libre'}</span>
           </div>
           ` : savings === 0 ? `
           <div class="text-xs text-slate-400 italic mb-2">Mismo precio</div>
@@ -133,7 +133,7 @@ function renderProductGroups(groups: ProductGroup[]): string {
             ${meliProds.length > 0 ? `
             <div>
               <div class="flex items-center gap-1 text-[10px] font-bold text-yellow-600 mb-1 uppercase tracking-tight">
-                <span class="px-1.5 py-0.5 rounded site-tag-meli">MercadoLibre (${meliProds.length})</span>
+                <span class="px-1.5 py-0.5 rounded site-tag-meli">Mercado Libre (${meliProds.length})</span>
               </div>
               <div class="space-y-1 ml-4">
                 ${meliProds.map(p => `

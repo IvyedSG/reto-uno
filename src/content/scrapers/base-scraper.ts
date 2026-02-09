@@ -47,17 +47,17 @@ export abstract class BaseScraper {
     return [];
   }
 
-  protected async scrollFullPage(steps: number = 8, delay: number = 250): Promise<void> {
+  protected async scrollFullPage(steps: number = 6, delay: number = 50): Promise<void> {
     const totalHeight = document.documentElement.scrollHeight;
     const stepHeight = totalHeight / steps;
     
     for (let i = 0; i < steps; i++) {
-      window.scrollTo({ top: i * stepHeight, behavior: 'smooth' });
+      window.scrollTo({ top: i * stepHeight, behavior: 'auto' });
       await this.wait(delay);
     }
     
-    window.scrollTo({ top: totalHeight, behavior: 'smooth' });
-    await this.wait(delay * 2);
+    window.scrollTo({ top: totalHeight, behavior: 'auto' });
+    await this.wait(50);
   }
 
   protected async waitForElements(selector: string, maxWaitMs: number = 8000): Promise<boolean> {

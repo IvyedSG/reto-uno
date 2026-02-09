@@ -18,6 +18,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   const modeSelect = document.getElementById('scraping-mode-select') as HTMLSelectElement;
 
   const searchPort = new PortManager();
+  const counterTargets = new Map<string, { current: number; target: number }>();
+
+  function animateCounters() {
+    let changed = false;
+    counterTargets.forEach((data, keywordId) => {
+      if (data.current < data.target) {
+        const diff = data.target - data.current;
+        const step = Math.max(1, Math.ceil(diff / 10));
+        data.current = Math.min(data.current + step, data.target);
+        
+        const countEl = document.querySelector(`[data-product-count="${keywordId}"]`);
+        if (countEl) {
+          countEl.textContent = String(data.current);
+        }
+        changed = true;
+      }
+    });
+
+    if (changed || counterTargets.size > 0) {
+      requestAnimationFrame(animateCounters);
+    }
+  }
+
+  requestAnimationFrame(animateCounters);
 
   const loadScrapingMode = async (): Promise<ScrapingMode> => {
     const result = await chrome.storage.local.get('scrapingMode');
@@ -43,13 +67,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local' && changes.keywords) {
       renderKeywords();
+      
+      const keywords = (changes.keywords.newValue || []) as any[];
+      keywords.forEach(k => {
+        if (!counterTargets.has(k.id)) {
+          counterTargets.set(k.id, { current: k.productCount, target: k.productCount });
+        } else {
+          const data = counterTargets.get(k.id)!;
+          if (k.productCount > data.target) data.target = k.productCount;
+        }
+      });
     }
   });
 
   const ensureConnected = () => {
     if (!searchPort.isConnected()) {
       searchPort.connect(PORT_NAMES.SEARCH);
-      searchPort.onMessage(() => {});
+      searchPort.onMessage((msg) => {
+        const payload = msg.payload;
+        if (payload.action === 'SCRAPING_PROGRESS' && payload.keywordId) {
+          const keywordId = payload.keywordId;
+          const target = payload.progress || 0;
+          
+          if (!counterTargets.has(keywordId)) {
+            const countEl = document.querySelector(`[data-product-count="${keywordId}"]`);
+            const current = countEl ? parseInt(countEl.textContent || '0', 10) : 0;
+            counterTargets.set(keywordId, { current, target });
+          } else {
+            const data = counterTargets.get(keywordId)!;
+            data.target = target;
+          }
+        }
+      });
     }
   };
 

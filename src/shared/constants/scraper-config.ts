@@ -39,9 +39,9 @@ export const SCRAPING_LIMITS: Record<ScrapingMode, ScrapingLimits> = {
 };
 
 export const TIMEOUTS = {
-  SCROLL_DELAY: 250,
-  PAGE_LOAD: 8000,
-  NAVIGATION: 5000,
-  BETWEEN_PAGES: 3000,
-  SCRIPT_INJECTION: 1000
+  SCROLL_DELAY: 50,
+  PAGE_LOAD: 4000,
+  NAVIGATION: 2000,
+  BETWEEN_PAGES: 0,
+  SCRIPT_INJECTION: 50
 } as const;
